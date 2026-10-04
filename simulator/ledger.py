@@ -102,3 +102,6 @@ def max_buy_qty(cash, price, fees):
     while q > 0 and price * q + charge(price * q, fees.fee_rate) > cash:
         q -= 1
     return q
+
+
+# 수정확인
