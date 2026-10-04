@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% from "_game_news.html" import card %}
+{% block title %}{{ s.name }} · 투자 게임{% endblock %}
+{% block body %}
+{% set cls = 'up' if diff > 0 else ('down' if diff < 0 else '') %}
+<a class="more" href="{{ url_for('game_home') }}">← 시세판으로</a>
+<div class="muted" style="font-size:13px;margin-top:10px">{{ s.sector }} · 가상 종목 · D{{ st.day }}</div>
+<h1>{{ s.name }} <span class="code">{{ code }}</span></h1>
+<div class="quote">
+  <span class="p {{ cls }}">{{ cur|won }}</span>
+  <span class="d {{ cls }}">{{ '▲' if diff > 0 else ('▼' if diff < 0 else '') }} {{ diff|abs|won }} ({{ pct|pct(2) }}%)</span>
+</div>
+
+<div class="grid two">
+  <div class="grid" style="align-content:start">
+    <section class="panel">
+      <h2>가격 흐름</h2>
+      <div class="chart-box"><canvas id="chart" aria-label="가격 차트"></canvas></div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">D0이 게임 시작일입니다. 점은 내가 사고판 날입니다.</p>
+      {% if holding %}
+      {% set pl = (cur - holding.avg) * holding.qty %}
+      <div class="kv" style="margin:20px 0 0">
+        <div>보유 수량<b>{{ holding.qty|won }}주</b></div>
+        <div>평균단가<b>{{ holding.avg|won }}원</b></div>
+        <div>평가손익<b class="{{ 'up' if pl>0 else ('down' if pl<0 else '') }}">{{ pl|signed }}원</b></div>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>기업 소개</h2>
+      <p style="margin:0 0 16px">{{ s.desc }}</p>
+      <h3 class="h3">{{ s.sector }} 업종의 민감도</h3>
+      <div class="expo">
+        {% for f, v in exposure.items() %}
+        <div>
+          <span>{{ factors[f] }} {{ '상승' if f != 'econ' else '개선' }} 시</span>
+          <b class="{{ 'up' if v > 0.25 else ('down' if v < -0.25 else 'muted') }}">
+            {{ '유리' if v > 0.25 else ('불리' if v < -0.25 else '영향 작음') }}</b>
+          <i class="bar"><em class="{{ 'up' if v > 0 else 'down' }}" style="width:{{ (v|abs / 1.5 * 50)|round(1) }}%;{{ 'left:50%' if v > 0 else 'right:50%' }}"></em></i>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="muted" style="font-size:13px;margin:12px 0 0">
+        베타 {{ '%.1f'|format(s.beta) }} — 시장 전체가 1% 움직일 때 평균 {{ '%.1f'|format(s.beta) }}% 움직입니다.
+        <a href="{{ url_for('factors') }}#sector">왜 그런지 보기</a></p>
+    </section>
+
+    <section class="panel">
+      <h2>관련 뉴스</h2>
+      {% for n in news %}{{ card(n, stocks) }}{% else %}<div class="empty">아직 관련 뉴스가 없습니다.</div>{% endfor %}
+    </section>
+  </div>
+
+  <div class="grid" style="align-content:start">
+    <aside class="panel">
+      {% if st.finished %}
+      <div class="empty">끝난 게임입니다.<br><a href="{{ url_for('game_home') }}">새 게임을 시작하세요</a></div>
+      {% else %}
+      <div class="tabs" role="tablist">
+        <button type="button" class="buy on" data-side="BUY">매수</button>
+        <button type="button" class="sell" data-side="SELL">매도</button>
+      </div>
+      <form method="post" action="{{ url_for('game_trade', code=code) }}">
+        <input type="hidden" name="side" id="side" value="BUY">
+        <label for="qty">수량 (주)</label>
+        <input type="number" id="qty" name="qty" min="1" value="1" required>
+        <div class="qbtns">
+          <button type="button" data-p="0.1">10%</button>
+          <button type="button" data-p="0.25">25%</button>
+          <button type="button" data-p="0.5">50%</button>
+          <button type="button" data-p="1">최대</button>
+        </div>
+        <div class="summary">
+          <div><span class="muted">주문 단가</span><span>{{ cur|won }}원</span></div>
+          <div><span class="muted">수수료</span><span id="s-fee">0원</span></div>
+          <div id="row-tax" hidden><span class="muted">거래세</span><span id="s-tax">0원</span></div>
+          <div class="tot"><span id="s-lbl">총 결제금액</span><span id="s-tot">0원</span></div>
+          <div><span class="muted" id="s-can-lbl">매수 가능</span><span id="s-can"></span></div>
+        </div>
+        <button class="go buy" id="go">매수하기</button>
+      </form>
+      <p class="muted" style="font-size:12px;margin:12px 0 0">지금 가격으로 바로 체결됩니다. 이 화면에 있는 동안은 시간이 멈춰 있습니다. 장이 마감되면 주문할 수 없습니다.</p>
+      {% endif %}
+    </aside>
+
+    {% if my_trades %}
+    <aside class="panel">
+      <h2>이 종목 거래</h2>
+      <div class="tbl-wrap"><table>
+        <tr><th>날</th><th>구분</th><th>수량</th><th>가격</th><th>실현손익</th></tr>
+        {% for t in my_trades %}
+        <tr><td>D{{ t.day }}</td><td><span class="badge {{ t.side }}">{{ '매수' if t.side == 'BUY' else '매도' }}</span></td>
+          <td>{{ t.qty|won }}</td><td>{{ t.price|won }}</td>
+          <td class="{{ 'up' if (t.profit or 0) > 0 else ('down' if (t.profit or 0) < 0 else '') }}">{{ t.profit|signed if t.profit is not none else '' }}</td></tr>
+        {% endfor %}
+      </table></div>
+    </aside>
+    {% endif %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const PRICE = {{ cur }}, FEE = {{ fee_rate }}, TAX = {{ tax_rate }};
+const MAXBUY = {{ max_buy }}, HOLD = {{ holding.qty if holding else 0 }};
+const fmt = n => Math.round(n).toLocaleString('ko-KR');
+const $ = id => document.getElementById(id);
+let side = 'BUY';
+
+if ($('qty')) {
+  const calc = () => {
+    const q = Math.max(0, parseInt($('qty').value) || 0);
+    const amt = PRICE * q, fee = Math.floor(amt * FEE);
+    const tax = side === 'SELL' ? Math.floor(amt * TAX) : 0;
+    $('s-fee').textContent = fmt(fee) + '원';
+    $('s-tax').textContent = fmt(tax) + '원';
+    $('row-tax').hidden = side !== 'SELL';
+    $('s-lbl').textContent = side === 'BUY' ? '총 결제금액' : '예상 정산금액';
+    $('s-tot').textContent = fmt(side === 'BUY' ? amt + fee : amt - fee - tax) + '원';
+    $('s-can-lbl').textContent = side === 'BUY' ? '매수 가능' : '매도 가능';
+    $('s-can').textContent = fmt(side === 'BUY' ? MAXBUY : HOLD) + '주';
+  };
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    side = b.dataset.side; $('side').value = side;
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+    $('go').className = 'go ' + (side === 'BUY' ? 'buy' : 'sell');
+    $('go').textContent = side === 'BUY' ? '매수하기' : '매도하기';
+    calc();
+  });
+  document.querySelectorAll('.qbtns button').forEach(b => b.onclick = () => {
+    const base = side === 'BUY' ? MAXBUY : HOLD;
+    $('qty').value = Math.max(1, Math.floor(base * parseFloat(b.dataset.p)));
+    calc();
+  });
+  $('qty').oninput = calc; calc();
+}
+
+const labels = {{ labels|tojson }}, prices = {{ prices|tojson }};
+const trades = {{ my_trades|tojson }};
+const start = labels.indexOf('D0');
+const up = prices[prices.length-1] >= prices[start];
+const marks = trades.map(t => ({ x: 'D' + t.day, y: t.price, side: t.side }));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();   // 공통 색(style.css의 :root)
+const UP = css('--up'), DOWN = css('--down');
+Chart.defaults.color = css('--sub'); Chart.defaults.borderColor = css('--line');
+new Chart($('chart'), {
+  type: 'line',
+  data: { labels, datasets: [
+    { data: prices, borderColor: up ? UP : DOWN, borderWidth: 2, pointRadius: 0,
+      tension: .15, fill: true, backgroundColor: (up ? UP : DOWN) + '1A',
+      segment: { borderDash: c => c.p1DataIndex <= start ? [4, 4] : undefined } },
+    { type: 'scatter', data: marks, pointRadius: 5, pointStyle: 'circle',
+      pointBackgroundColor: marks.map(m => m.side === 'BUY' ? UP : DOWN),
+      pointBorderColor: css('--panel'), pointBorderWidth: 2 } ] },
+  options: { maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => c.datasetIndex ? (c.raw.side === 'BUY' ? '매수 ' : '매도 ') + fmt(c.raw.y) + '원'
+                                                          : fmt(c.parsed.y) + '원' } } },
+    interaction: { mode: 'nearest', intersect: false },
+    scales: { x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+              y: { ticks: { callback: v => fmt(v) } } } }
+});
+</script>
+{% endblock %}

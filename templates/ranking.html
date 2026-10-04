@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}명예의 전당{% endblock %}
+{% block body %}
+{% set icons = {'beginner': '🌱', 'intermediate': '📈', 'expert': '🦈'} %}
+<div class="rank-head">
+  <div>
+    <h1>명예의 전당</h1>
+    <p class="muted" style="margin:0">{{ days }}거래일을 끝까지 마친 게임의 최종 자산 순위입니다. 길이가 같은 게임끼리 겨룹니다.</p>
+  </div>
+  <div class="rank-filters">
+    <nav class="seg-links" aria-label="게임 길이">
+      {% for d in game_days %}
+        <a href="{{ url_for('ranking', days=d, period=period, level=level) }}" class="{{ 'on' if days == d }}"
+           {{ 'aria-current=page' if days == d }}>{{ d }}일</a>
+      {% endfor %}
+    </nav>
+    <nav class="seg-links" aria-label="기간">
+      {% for key, label in [('all', '전체 기간'), ('week', '최근 7일')] %}
+        <a href="{{ url_for('ranking', days=days, period=key, level=level) }}" class="{{ 'on' if period == key }}"
+           {{ 'aria-current=page' if period == key }}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="seg-links" aria-label="투자 경험">
+      <a href="{{ url_for('ranking', days=days, period=period, level='all') }}" class="{{ 'on' if level == 'all' }}">모두</a>
+      {% for key, label in experience.items() %}
+        <a href="{{ url_for('ranking', days=days, period=period, level=key) }}" class="{{ 'on' if level == key }}" title="{{ label }}">
+          {{ icons[key] }} {{ {'beginner': '초보', 'intermediate': '중수', 'expert': '고수'}[key] }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+</div>
+<section class="panel">
+  {% if board %}
+  <div class="tbl-wrap"><table>
+    <tr><th>순위</th><th style="text-align:left">닉네임</th><th style="text-align:left">스타일</th><th>최종 자산</th><th>수익률</th><th>거래</th></tr>
+    {% for r in board %}
+    <tr class="{{ 'rank-me' if r.user_id == user.id }}">
+      <td>{% if loop.index <= 3 %}<span class="medal">{{ ['🥇', '🥈', '🥉'][loop.index0] }}</span>{% else %}{{ loop.index }}{% endif %}</td>
+      <td style="text-align:left"><span title="{{ experience[r.experience] }}">{{ icons[r.experience] }}</span> {{ r.nickname }}{{ ' (나)' if r.user_id == user.id }}</td>
+      <td style="text-align:left">{% if r.persona %}{{ r.persona[0] }} {{ r.persona[1] }}{% else %}<span class="muted">-</span>{% endif %}</td>
+      <td>{{ r.total|won }}원</td>
+      <td class="{{ 'up' if r.pct > 0 else ('down' if r.pct < 0 else '') }}">{{ r.pct|pct(2) }}%</td>
+      <td>{{ r.trades }}회</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty">{{ '이 조건으로 끝까지 마친 게임이 아직 없습니다.' if period != 'all' or level != 'all' else '아직 끝까지 마친 게임이 없습니다.' }}</div>
+  {% endif %}
+  <p class="muted" style="font-size:12px;margin:12px 0 0">🌱🦈 표시는 회원이 지금 설정한 투자 경험입니다.</p>
+</section>
+{% endblock %}

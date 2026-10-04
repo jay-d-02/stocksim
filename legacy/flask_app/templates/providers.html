@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}시세 연결{% endblock %}
+{% block body %}
+<h1>시세 연결 상태</h1>
+<p class="muted" style="margin:0 0 18px">위에서부터 순서대로 시세를 받아오고, 실패하면 다음 증권사로 넘어갑니다.
+  3번 연속 실패한 증권사는 1분 동안 쉬게 합니다.</p>
+
+<section class="panel" style="margin-bottom:18px">
+  <h2>사용 중인 증권사</h2>
+  <div class="tbl-wrap"><table>
+    <tr><th>순서</th><th style="text-align:left">증권사</th><th>상태</th><th>성공</th><th>실패</th><th>응답시간</th><th style="text-align:left">최근 오류</th></tr>
+    {% for key, st in status.items() %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td style="text-align:left"><b>{{ st.label }}</b></td>
+      <td>{% if st.down_until > now %}<span class="up">일시 중지</span>{% elif st.ok %}<span style="color:var(--brand)">정상</span>{% else %}<span class="muted">대기</span>{% endif %}</td>
+      <td>{{ st.ok|won }}</td>
+      <td>{{ st.fail|won }}</td>
+      <td>{{ (st.last_ms ~ 'ms') if st.last_ms is not none else '-' }}</td>
+      <td style="text-align:left;white-space:normal;font-size:13px" class="muted">{{ st.last_error or '' }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <p class="muted" style="font-size:13px;margin:14px 0 0">키가 없는 증권사는 목록에 나오지 않습니다. 이 수치는 서버 워커별로 따로 집계됩니다.</p>
+</section>
+
+<section class="panel">
+  <h2>증권사별 시세 비교</h2>
+  <form style="display:flex;gap:8px;max-width:360px">
+    <input type="text" name="code" value="{{ code }}" aria-label="종목코드">
+    <input type="hidden" name="run" value="1">
+    <button class="btn-ghost" style="white-space:nowrap">모두 조회</button>
+  </form>
+  {% if rows %}
+  <p style="margin:16px 0 6px"><b>{{ name }}</b> <span class="code">{{ code }}</span></p>
+  <div class="tbl-wrap"><table>
+    <tr><th style="text-align:left">증권사</th><th>현재가</th><th>전일대비</th><th>등락률</th><th>응답시간</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.label }}</td>
+      {% if r.ok %}
+      {% set c = 'up' if r.diff>0 else ('down' if r.diff<0 else '') %}
+      <td class="{{ c }}">{{ r.price|won }}</td>
+      <td class="{{ c }}">{{ r.diff|signed }}</td>
+      <td class="{{ c }}">{{ '%+.2f'|format(r.pct) }}%</td>
+      {% else %}
+      <td colspan="3" class="up" style="white-space:normal;font-size:13px">{{ r.error }}</td>
+      {% endif %}
+      <td>{{ r.ms }}ms</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</section>
+{% endblock %}

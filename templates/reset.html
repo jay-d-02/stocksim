@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}새 비밀번호{% endblock %}
+{% block body_class %}authp{% endblock %}
+{% block flashes %}{% endblock %}
+{% block body %}
+<section class="au-card au-solo">
+  <a class="au-back" href="{{ url_for('login') }}">← 로그인으로</a>
+  <h1>새 비밀번호 정하기</h1>
+  {% for cat, msg in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ cat }}" role="alert">{{ msg }}</div>
+  {% endfor %}
+  {% if not valid %}
+    <p class="au-sub">링크가 만료됐거나 이미 사용됐어요. 링크는 30분 동안 한 번만 쓸 수 있어요.</p>
+    <a class="go au-go au-btn" href="{{ url_for('forgot') }}">비밀번호 찾기 다시 하기</a>
+  {% else %}
+    <p class="au-sub">바꾸면 다른 기기의 로그인은 모두 끝나요.</p>
+    <form method="post" class="au-form">
+      <input type="hidden" name="token" value="{{ token }}">
+      <div class="au-field">
+        <label for="p">새 비밀번호</label>
+        <div class="au-pw">
+          <input id="p" type="password" name="password" required minlength="8" maxlength="128" autofocus
+                 autocomplete="new-password" placeholder="8자 이상, 아이디와 다르게">
+          <button type="button" class="au-eye" aria-label="비밀번호 보기" aria-pressed="false">보기</button>
+        </div>
+      </div>
+      <div class="au-field">
+        <label for="p2">한 번 더</label>
+        <input id="p2" type="password" name="password2" required minlength="8" maxlength="128" autocomplete="new-password">
+      </div>
+      <button class="go au-go">비밀번호 바꾸기</button>
+    </form>
+  {% endif %}
+</section>
+{% include "_pw_toggle.html" %}
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}거래내역{% endblock %}
+{% block body %}
+<h1>거래내역</h1>
+<p class="muted" style="margin:0 0 18px">누적 실현손익
+  <b class="{{ 'up' if realized>0 else ('down' if realized<0 else '') }}">{{ realized|signed }}원</b></p>
+<section class="panel">
+  {% if trades %}
+  <div class="tbl-wrap"><table>
+    <tr><th>일시</th><th>종목</th><th>구분</th><th>수량</th><th>체결가</th><th>수수료·세금</th><th>실현손익</th></tr>
+    {% for t in trades %}
+    <tr>
+      <td class="muted">{{ t.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td style="text-align:right"><a href="{{ url_for('stock', code=t.code) }}">{{ stock_name(t.code) }}</a></td>
+      <td><span class="badge {{ t.side }}">{{ '매수' if t.side=='BUY' else '매도' }}</span></td>
+      <td>{{ t.qty|won }}</td>
+      <td>{{ t.price|won }}</td>
+      <td>{{ (t.fee + t.tax)|won }}</td>
+      <td class="{{ 'up' if (t.profit or 0)>0 else ('down' if (t.profit or 0)<0 else '') }}">
+        {{ t.profit|signed if t.profit is not none else '' }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+    <div class="empty">거래한 기록이 없습니다.</div>
+  {% endif %}
+</section>
+{% endblock %}

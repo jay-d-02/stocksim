@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}시뮬레이터{% endblock %} · Event-driven Stock Market Simulator</title>
+<meta name="theme-color" content="#070B13">
+{# 모든 화면은 어두운 테마 하나로 통일. 예전 전환 버튼으로 저장된 선택은 지운다 #}
+<script>try { localStorage.removeItem('theme'); } catch (e) {}</script>
+<link rel="manifest" href="{{ url_for('manifest') }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="주식 시뮬레이터">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}{{ ' has-tabbar' if user }}">
+{% if user %}
+{% set on_game = endpoint.startswith('game') and endpoint != 'game_style' %}
+{% set on_learn = endpoint in ('learn', 'factors', 'game_style') %}
+<header class="top"><div class="top-in">
+  <a class="logo" href="{{ url_for('game_home') }}"><i></i>주식 시뮬레이터</a>
+  <nav class="nav">
+    <a href="{{ url_for('game_home') }}" class="{{ 'on' if on_game }}">투자게임</a>
+    <a href="{{ url_for('learn') }}" class="{{ 'on' if on_learn }}">투자 공부</a>
+    <a href="{{ url_for('ranking') }}" class="{{ 'on' if endpoint=='ranking' }}">명예의 전당</a>
+    <a href="/docs" target="_blank" rel="noopener">API 문서</a>
+    {% if user.is_admin %}<a href="{{ url_for('admin_users') }}" class="{{ 'on' if endpoint.startswith('admin') }}">회원 관리</a>{% endif %}
+  </nav>
+  <div class="me">
+    <a href="{{ url_for('account') }}" class="{{ 'on' if endpoint == 'account' }}">{{ user.nickname }}</a> ·
+    <a href="{{ url_for('logout') }}">로그아웃</a>
+  </div>
+</div></header>
+
+{# 휴대폰: 앱처럼 아래 탭 막대 #}
+<nav class="tabbar" aria-label="주요 메뉴">
+  <a href="{{ url_for('game_home') }}" class="{{ 'on' if on_game }}"><span aria-hidden="true">🎮</span>게임</a>
+  <a href="{{ url_for('learn') }}" class="{{ 'on' if endpoint in ('learn', 'factors') }}"><span aria-hidden="true">📚</span>공부</a>
+  <a href="{{ url_for('game_style') }}" class="{{ 'on' if endpoint=='game_style' }}"><span aria-hidden="true">📊</span>성향</a>
+  <a href="{{ url_for('ranking') }}" class="{{ 'on' if endpoint=='ranking' }}"><span aria-hidden="true">🏆</span>순위</a>
+  <button type="button" id="more-btn" aria-expanded="false" aria-controls="more-sheet"><span aria-hidden="true">☰</span>더보기</button>
+</nav>
+<div class="sheet" id="more-sheet" hidden>
+  <div class="sheet-box" role="dialog" aria-modal="true" aria-label="더보기">
+    <div class="sheet-grip"></div>
+    <a href="{{ url_for('game_news') }}">📰 전체 뉴스</a>
+    <a href="{{ url_for('factors') }}">📖 가격변동 요인</a>
+    <a href="{{ url_for('account') }}">👤 내 정보</a>
+    {% if user.is_admin %}<a href="{{ url_for('admin_users') }}">👑 회원 관리</a>{% endif %}
+    <a href="/docs" target="_blank" rel="noopener">🧩 API 문서</a>
+    <button type="button" class="install-btn" hidden>📲 앱으로 설치</button>
+    <a href="{{ url_for('logout') }}" class="muted">로그아웃 ({{ user.nickname }})</a>
+  </div>
+</div>
+{% endif %}
+<main>
+  {% block flashes %}
+  {% for cat, msg in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+  {% endblock %}
+  {% block body %}{% endblock %}
+</main>
+
+<div class="install-bar" id="install-bar" hidden>
+  <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="" width="40" height="40">
+  <div><b>앱으로 설치하기</b><span id="install-msg">홈 화면에 추가하면 앱처럼 전체 화면으로 쓸 수 있어요.</span></div>
+  <button type="button" class="install-btn go buy">설치</button>
+  <button type="button" class="install-x" aria-label="닫기">×</button>
+</div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}투자 공부{% endblock %}
+{% block body %}
+{% include "_learn_nav.html" %}
+
+<!-- ============================================================ 요인 실험실 -->
+<section class="ltab" id="tab-lab">
+  <h1>요인 실험실</h1>
+  <p class="muted lead">금리·환율·유가·경기를 직접 움직여 보세요. 투자 게임 엔진이 쓰는 계산 그대로, 12개 종목이 어떻게 반응하는지 보여 줍니다.</p>
+
+  <div class="lab">
+    <div class="lab-ctrl">
+      <div class="panel ctl">
+        <h2>🏦 기준금리 결정</h2>
+        <div class="seg" id="r-dir" role="group" aria-label="시장 예상 방향">
+          <button type="button" data-v="1" class="on">인상 예상</button><button type="button" data-v="-1">인하 예상</button>
+        </div>
+        <label for="r-p">회의 전 시장 예상 확률 <b id="r-p-v">50%</b></label>
+        <input type="range" id="r-p" min="0" max="100" step="5" value="50">
+        <label>실제 결과</label>
+        <div class="seg" id="r-out" role="group" aria-label="실제 결과">
+          <button type="button" data-v="none" class="on">회의 없음</button><button type="button" data-v="yes" id="r-yes">예상대로 인상</button><button type="button" data-v="no">동결</button>
+        </div>
+        <div class="surprise" id="r-surprise"></div>
+      </div>
+
+      <div class="panel ctl">
+        <h2>💱 원·달러 환율</h2>
+        <label for="fx">변화 <b id="fx-v">0원</b></label>
+        <input type="range" id="fx" min="-100" max="100" step="10" value="0">
+        <div class="ticks"><span>원화 강세</span><span>원화 약세</span></div>
+      </div>
+
+      <div class="panel ctl">
+        <h2>🛢 국제유가</h2>
+        <label for="oil">변화 <b id="oil-v">0달러</b></label>
+        <input type="range" id="oil" min="-20" max="20" step="2" value="0">
+        <div class="ticks"><span>급락</span><span>급등</span></div>
+      </div>
+
+      <div class="panel ctl">
+        <h2>🏭 경기</h2>
+        <label for="econ">경기 흐름 <b id="econ-v">보통</b></label>
+        <input type="range" id="econ" min="-2" max="2" step="1" value="0">
+        <div class="ticks"><span>침체</span><span>호황</span></div>
+      </div>
+      <button type="button" class="btn-ghost" id="lab-reset" style="width:100%">모두 초기화</button>
+    </div>
+
+    <div class="lab-out">
+      <div class="panel">
+        <div class="lab-h">
+          <div>
+            <h2 id="lab-title">예상 주가 반응</h2>
+            <p class="muted" id="lab-sub" style="margin:0;font-size:13px">왼쪽에서 요인을 움직이거나 아래 실제 사건을 골라 보세요.</p>
+          </div>
+        </div>
+        <div class="dbars" id="bars" role="img" aria-label="종목별 예상 주가 반응 막대 차트"></div>
+        <div class="bars-axis"><span>불리</span><span>0%</span><span>유리</span></div>
+        <div class="lab-why" id="lab-why"></div>
+        <details class="tview">
+          <summary>표로 보기 (요인별 분해)</summary>
+          <div class="tbl-wrap"><table id="lab-table"></table></div>
+        </details>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">사건 직후부터 며칠 동안 반영되는 크기입니다. 실제 게임에서는 여기에 ±20% 정도의 무작위 차이와 매일의 자연스러운 등락이 더해집니다.</p>
+      </div>
+
+      <div class="panel">
+        <h2>실제 사건으로 보기</h2>
+        <div class="chips" id="scen"></div>
+      </div>
+    </div>
+  </div>
+  <div class="bar-tip" id="bar-tip" hidden></div>
+</section>
+
+<!-- ============================================================ 투자 팁 -->
+<section class="ltab" id="tab-tips" hidden>
+  <h1>투자 팁</h1>
+  <p class="muted lead">게임에서도, 실제 투자에서도 통하는 원칙들입니다. 각 팁의 '게임에서 써먹기'를 한 판에 하나씩 연습해 보세요.</p>
+  <div class="tips">
+    {% set tips = [
+      ("01", "뉴스보다 '예상과의 차이'를 보세요", "priced",
+       "주가는 좋은 뉴스에 오르는 게 아니라 '예상보다 좋은' 뉴스에 오릅니다. 모두가 아는 호재는 이미 가격에 들어가 있습니다.",
+       "금리 결정 D-2 예고의 확률을 보세요. 인상 확률 80%에서 실제로 인상되면 반응은 작고, 동결되면 반대 방향으로 크게 움직입니다. 요인 실험실에서 확률을 바꿔 보며 확인해 보세요."),
+      ("02", "금리 방향이 업종의 순서를 바꿉니다", "rate",
+       "금리가 오르면 은행이 웃고, 먼 미래 기대로 비싸게 거래되는 성장주(바이오·2차전지·게임)와 빚이 많은 건설이 웁니다. 내리면 정반대입니다.",
+       "금리 결정 전에 '어느 쪽이 나오면 뭘 살지'를 미리 정해 두세요. 발표되는 순간 대부분이 반영되므로, 보고 나서 고민하면 늦습니다."),
+      ("03", "환율은 수출주와 수입주를 가릅니다", "fx",
+       "원화가 약해지면(환율 상승) 해외에서 번 달러의 가치가 커져 수출 기업이 유리합니다. 달러로 원료·연료를 사는 기업은 불리합니다.",
+       "환율 급등 뉴스가 뜨면 자동차·반도체는 유리, 항공·식품은 불리합니다."),
+      ("04", "한 바구니에 담지 마세요", "sector",
+       "한 종목, 한 업종에 몰면 사건 하나에 계좌 전체가 흔들립니다. 서로 반대로 움직이는 업종을 섞으면 충격이 줄어듭니다.",
+       "유가가 오르면 정유는 오르고 항공은 내립니다. 둘을 함께 들고 있으면 유가 뉴스에 덜 흔들립니다. 실험실에서 유가를 움직여 보세요."),
+      ("05", "결과가 둘 중 하나인 사건엔 조금만", "sentiment",
+       "신약 임상 결과처럼 성공 아니면 실패인 사건은 결과 직전 몰빵하면 도박이 됩니다. 크게 벌 수도 있지만 하루에 30% 가까이 잃을 수도 있습니다.",
+       "새봄바이오 임상 결과 예고가 뜨면 자산의 10% 이하만 넣어 보고, 결과 후 가격을 비교해 보세요."),
+      ("06", "소문은 늦게 들을수록 비쌉니다", "sentiment",
+       "공식 발표가 아닌 소문은 사실이 아닐 때가 더 많습니다. 소문이 내 귀에 들렸을 땐 이미 많이 오른 뒤인 경우가 대부분입니다.",
+       "게임 속 [찌라시] 인수설은 약 3분의 2가 '사실무근'으로 끝납니다. 곧바로 거래소의 조회공시 요구가 뜨고, 답변 기한까지 "
+       "[단서] 뉴스(인수 후보의 반응, 기관이 사는지 파는지, 내부자 매매)가 나옵니다. 단서가 모두 같은 쪽을 가리킬 때만 움직여 보세요."),
+      ("07", "뉴스는 하루에 다 반영되지 않습니다", "limit",
+       "시장은 큰 뉴스를 한 번에 소화하지 못해 며칠에 걸쳐 가격이 따라갑니다. 첫 반응만 보고 끝났다고 판단하지 마세요.",
+       "게임에서도 사건 효과의 약 60%는 뉴스가 뜬 순간에, 나머지는 다음 하루~이틀에 걸쳐 나타납니다. 첫 반응을 놓쳤다면 남은 흐름을 노려 보세요. 발표 다음 날 차트를 확인해 보세요."),
+      ("08", "하락이 걱정되면 방어주와 베타를 보세요", "econ",
+       "베타는 시장이 1% 움직일 때 그 종목이 평균 몇 % 움직이는지입니다. 경기 침체 뉴스엔 베타가 낮은 통신·식품 같은 방어주가 덜 떨어집니다.",
+       "미국 증시 급락이나 경기 침체 뉴스가 뜨면 베타 1.3 이상인 종목의 비중을 줄여 보세요."),
+      ("09", "사고팔 때마다 비용이 듭니다", "limit",
+       "사고 팔면 수수료와 거래세가 붙습니다. 자주 사고팔면 이 비용이 수익을 조금씩 갉아먹습니다.",
+       "이 게임은 매수·매도 수수료 각 " ~ ('%.3f'|format(fee_rate * 100)) ~ "%, 매도 거래세 " ~ ('%.1f'|format(tax_rate * 100)) ~ "%입니다. 한 번 사고팔 때마다 약 " ~ ('%.2f'|format((fee_rate * 2 + tax_rate) * 100)) ~ "%가 나가므로, 10번 왕복하면 수익이 없어도 약 " ~ ('%.1f'|format((fee_rate * 2 + tax_rate) * 1000)) ~ "%를 잃습니다."),
+      ("10", "들어가기 전에 나올 규칙을 정하세요", "sentiment",
+       "'-7%면 판다, +15%면 절반 판다'처럼 미리 정한 규칙이 있으면 공포와 욕심에 덜 흔들립니다.",
+       "한 판 동안 손절 규칙 하나를 정해 지켜 보고, 지키지 않았을 때와 결과를 비교해 보세요."),
+      ("11", "현금도 전략입니다", "priced",
+       "살 이유가 없으면 사지 않는 것도 판단입니다. 현금을 남겨 두면 큰 사건이 터졌을 때 싸게 살 기회를 잡을 수 있습니다.",
+       "처음부터 100% 투자하지 말고 30% 정도는 현금으로 두었다가 큰 하락 사건 때 써 보세요."),
+      ("12", "왜 샀는지 기록하고 복기하세요", "basic",
+       "같은 실수를 반복하지 않는 가장 좋은 방법은 기록입니다. 산 이유와 결과를 비교하면 내 판단의 버릇이 보입니다.",
+       "게임이 끝나면 종목 상세 화면의 거래 기록과 그날 뉴스를 함께 보며, 맞은 판단과 틀린 판단을 하나씩 찾아보세요."),
+    ] %}
+    {% for no, title, factor, body, game in tips %}
+    <article class="panel tip" id="tip-{{ no }}">
+      <div class="tip-no">{{ no }}</div>
+      <h2>{{ title }}</h2>
+      <p>{{ body }}</p>
+      <div class="ex"><b>게임에서 써먹기</b>{{ game }}</div>
+      <a class="more" href="{{ url_for('factors') }}#{{ factor }}">원리 읽기 →</a>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ============================================================ 퀴즈 -->
+<section class="ltab" id="tab-quiz" hidden>
+  <h1>퀴즈</h1>
+  <p class="muted lead">뉴스를 보고 주가가 어떻게 움직일지 맞혀 보세요. 문제는 게임에 나오는 사건에서 만들어집니다.</p>
+  <div class="panel quiz" id="quiz"></div>
+</section>
+
+<script>
+const LEARN = {
+  stocks: {{ stocks|tojson }}, sectors: {{ sectors|tojson }}, units: {{ units|tojson }},
+  scenarios: {{ scenarios|tojson }}, corp: {{ corp|tojson }},
+  fee: {{ fee_rate }}, tax: {{ tax_rate }}, factorsUrl: "{{ url_for('factors') }}",
+};
+</script>
+<script src="{{ url_for('static', filename='learn.js') }}"></script>
+{% endblock %}

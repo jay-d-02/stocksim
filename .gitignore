@@ -1,0 +1,21 @@
+# 비밀값 (증권사 API 키·DB 비밀번호 등) — 절대 올리지 않음
+.env
+.env.*
+!.env.example
+
+# DB 백업·서버로 옮길 압축 파일 (회원 정보가 들어 있음, deploy/LINUX.md)
+*.dump
+*.tgz
+
+# 실행 중 생기는 파일
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.log
+
+# 편집기
+.vscode/
+.idea/

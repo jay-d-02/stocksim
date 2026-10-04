@@ -1,0 +1,19 @@
+{# 게임 뉴스 카드 한 장. n: 뉴스, stocks: 종목 사전 #}
+{% macro card(n, stocks) %}
+<article class="gnews {{ n.kind }}">
+  <div class="gnews-meta">
+    <span class="gtag t-{{ n.kind }}">{{ n.tag }}</span>
+    <span class="muted">D{{ n.day }}{% if n.time %} {{ n.time }}{% endif %}{% if n.place %} · {{ n.place }}{% endif %}</span>
+    {% for c in n.codes %}<a class="gcode" href="{{ url_for('game_stock', code=c) }}">{{ stocks[c].name }}</a>{% endfor %}
+  </div>
+  <h3>{{ n.title }}</h3>
+  <p>{{ n.body }}</p>
+  {% if n.why %}
+  <details>
+    <summary>해설 보기</summary>
+    <p>{{ n.why }}</p>
+    {% if n.factor %}<a href="{{ url_for('factors') }}#{{ n.factor }}">관련 요인 자세히 →</a>{% endif %}
+  </details>
+  {% endif %}
+</article>
+{% endmacro %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}게임 복기{% endblock %}
+{% block body %}
+<a class="more" style="margin:0 0 10px" href="{{ url_for('game_style') }}">← 내 투자 성향</a>
+<div class="sty-head">
+  <div>
+    <h1>게임 복기 {% if persona %}<span class="muted" style="font-weight:600">· {{ persona[0] }} {{ persona[1] }}</span>{% endif %}</h1>
+    <p class="muted" style="margin:0">{{ g.finished_at.strftime('%Y.%m.%d') }} 끝냄 · {{ g.max_day }}거래일 · 거래 {{ data.trades|length }}회</p>
+  </div>
+</div>
+
+<div class="tiles">
+  <div class="panel tile"><span>최종 자산</span><b>{{ g.final_total|won }}<small>원</small></b></div>
+  <div class="panel tile"><span>내 수익률</span><b class="{{ 'up' if pct > 0.05 else ('down' if pct < -0.05 else '') }}">{{ pct|pct }}%</b></div>
+  <div class="panel tile"><span>시장(종합지수)</span><b class="{{ 'up' if mkt > 0.05 else ('down' if mkt < -0.05 else '') }}">{{ mkt|pct }}%</b></div>
+  <div class="panel tile"><span>시장 대비</span><b class="{{ 'up' if pct - mkt > 0.05 else ('down' if pct - mkt < -0.05 else '') }}">{{ (pct - mkt)|pct }}<small>p</small></b></div>
+</div>
+
+<section class="panel" style="margin-bottom:18px">
+  <h2>내 자산 vs 시장</h2>
+  <div class="chart-box" style="height:240px"><canvas id="eq" aria-label="날마다 내 자산과 종합지수 수익률"></canvas></div>
+</section>
+
+{% if data.codes %}
+<section class="panel" style="margin-bottom:18px">
+  <div class="rp-head">
+    <h2 style="margin:0">종목별 매매 시점</h2>
+    <div class="chips" id="rp-codes" role="tablist" aria-label="종목">
+      {% for c in data.codes %}<a href="#" role="tab" data-code="{{ c }}">{{ names[c] }}</a>{% endfor %}
+    </div>
+  </div>
+  <p class="muted" style="font-size:13px;margin:6px 0 10px">점: <span class="up">● 매수</span> · <span class="down">● 매도</span> (그날 종가 선 위에 실제 체결가로 표시)</p>
+  <div class="chart-box" style="height:280px"><canvas id="px" aria-label="선택한 종목의 일별 종가와 매매 시점"></canvas></div>
+  <div class="grid two" style="margin-top:18px">
+    <div>
+      <h3 class="h3">이 종목 뉴스</h3>
+      <ul class="news rp-news" id="rp-news"></ul>
+    </div>
+    <div>
+      <h3 class="h3">이 종목 거래</h3>
+      <div class="tbl-wrap"><table id="rp-trades"></table></div>
+    </div>
+  </div>
+</section>
+{% else %}
+<section class="panel"><div class="empty">이 게임에서는 거래가 없었어요.</div></section>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+const D = {{ data|tojson }};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const UP = css('--up'), DOWN = css('--down'), BRAND = css('--brand'), SUB = css('--sub'), LINE = css('--line');
+Chart.defaults.color = SUB; Chart.defaults.borderColor = LINE;
+const fmt = v => Math.round(v).toLocaleString('ko-KR');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sp = v => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+
+new Chart(document.getElementById('eq'), {
+  type: 'line',
+  data: { labels: D.curve.map(p => 'D' + p.day), datasets: [
+    { label: '내 자산', data: D.curve.map(p => p.me), borderColor: BRAND, backgroundColor: BRAND, borderWidth: 2, pointRadius: 0, tension: .15 },
+    { label: '종합지수', data: D.curve.map(p => p.mkt), borderColor: SUB, backgroundColor: SUB, borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: .15 } ] },
+  options: { maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 14, boxHeight: 2 } },
+      tooltip: { callbacks: { label: c => ` ${c.dataset.label} ${sp(c.parsed.y)}` } } },
+    scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' } } } }
+});
+
+if (!D.codes.length) return;
+let chart = null;
+function show(code) {
+  document.querySelectorAll('#rp-codes a').forEach(a => a.classList.toggle('on', a.dataset.code === code));
+  document.querySelectorAll('#rp-codes a').forEach(a => a.setAttribute('aria-selected', a.dataset.code === code));
+  const c = D.candles[code] || [], trades = D.trades.filter(t => t.code === code);
+  const labels = c.map(p => 'D' + p.day);
+  const marks = trades.map(t => ({ x: 'D' + t.day, y: t.price, t }));
+  const data = { labels, datasets: [
+    { data: c.map(p => p.close), borderColor: SUB, borderWidth: 2, pointRadius: 0, tension: .1, label: '종가' },
+    { type: 'scatter', data: marks, pointRadius: 6, pointHoverRadius: 8,
+      pointBackgroundColor: marks.map(m => m.t.side === 'BUY' ? UP : DOWN), pointBorderColor: css('--panel'), pointBorderWidth: 2 } ] };
+  if (chart) { chart.data = data; chart.update('none'); }
+  else chart = new Chart(document.getElementById('px'), { type: 'line', data,
+    options: { maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: x => x.datasetIndex
+        ? `${x.raw.t.side === 'BUY' ? '매수' : '매도'} ${x.raw.t.qty}주 · ${fmt(x.raw.t.price)}원 (${x.raw.t.time})` : `종가 ${fmt(x.parsed.y)}원` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { ticks: { callback: v => fmt(v) } } } } });
+
+  const news = D.news.filter(n => n.codes.includes(code) || (!n.codes.length && n.kind === 'event'));
+  document.getElementById('rp-news').innerHTML = news.length ? news.slice().reverse().map(n =>
+    `<li><b class="gtag ${n.kind === 'preview' ? 't-preview' : ''}">${esc(n.tag)}</b> <span class="muted" style="display:inline">D${n.day} ${esc(n.time)}</span>
+      <div>${esc(n.title)}</div>${n.why ? `<span class="muted">${esc(n.why)}</span>` : ''}</li>`).join('')
+    : '<li class="muted">관련 뉴스가 없었어요.</li>';
+  document.getElementById('rp-trades').innerHTML = '<tr><th style="text-align:left">날</th><th>구분</th><th>수량</th><th>가격</th><th>실현손익</th></tr>' +
+    trades.map(t => `<tr><td style="text-align:left">D${t.day} ${esc(t.time)}</td>
+      <td><span class="badge ${t.side}">${t.side === 'BUY' ? '매수' : '매도'}</span></td><td>${t.qty}</td><td>${fmt(t.price)}</td>
+      <td class="${t.pnl > 0 ? 'up' : (t.pnl < 0 ? 'down' : '')}">${t.pnl == null ? '' : (t.pnl > 0 ? '+' : '') + fmt(t.pnl)}</td></tr>`).join('');
+}
+document.getElementById('rp-codes').addEventListener('click', e => {
+  const a = e.target.closest('a[data-code]');
+  if (a) { e.preventDefault(); show(a.dataset.code); }
+});
+show(D.codes[0]);
+})();
+</script>
+{% endblock %}

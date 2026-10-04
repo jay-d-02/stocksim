@@ -1,0 +1,11 @@
+<script>
+document.querySelectorAll('.au-eye').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var i = b.previousElementSibling, show = i.type === 'password';
+    i.type = show ? 'text' : 'password';
+    b.textContent = show ? '숨기기' : '보기';
+    b.setAttribute('aria-pressed', show);
+    b.setAttribute('aria-label', show ? '비밀번호 숨기기' : '비밀번호 보기');
+  });
+});
+</script>

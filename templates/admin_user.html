@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}회원 #{{ target.id }}{% endblock %}
+{% block body %}
+{% set icons = {'beginner': '🌱', 'intermediate': '📈', 'expert': '🦈'} %}
+{% set statuses = {'ACTIVE': '진행 중', 'FINISHED': '완주', 'ABANDONED': '포기'} %}
+<a class="more" style="margin:0 0 10px" href="{{ url_for('admin_users') }}">← 회원 목록</a>
+<div class="acct">
+  <div class="acct-head">
+    <div class="acct-avatar" aria-hidden="true">{{ icons[target.experience] if target.active else '🚪' }}</div>
+    <div>
+      <h1>{{ target.display_name }}
+        {% if target.permit == 'ADMIN' %}<span class="adm-badge">관리자</span>{% endif %}
+        {% if not target.active %}<span class="adm-st n">탈퇴</span>{% endif %}</h1>
+      <p class="muted" style="margin:0">회원 #{{ target.id }} · {{ target.created_at.strftime('%Y.%m.%d') }} 가입</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2>회원 정보</h2>
+    <dl class="adm-dl">
+      <dt>아이디</dt><dd>{{ target.username or '(삭제됨)' }}</dd>
+      <dt>닉네임</dt><dd>{{ target.nickname or '(삭제됨)' }}</dd>
+      <dt>이메일</dt><dd>{{ target.email or ('(삭제됨)' if not target.active else '-') }}</dd>
+      <dt>투자 경험</dt><dd>{{ icons[target.experience] }} {{ experience[target.experience] }}</dd>
+      <dt>save_status</dt><dd>{% if target.active %}<span class="adm-st y">Y</span> 사용 중
+        {% else %}<span class="adm-st n">N</span> {{ target.withdrawn_at.strftime('%Y.%m.%d %H:%M') }} 탈퇴{% endif %}</dd>
+      <dt>permit</dt><dd>{{ target.permit }} ({{ permits[target.permit] }})</dd>
+      <dt>개인정보 동의</dt><dd>{{ target.privacy_agreed_at.strftime('%Y.%m.%d %H:%M') if target.privacy_agreed_at else '동의 절차 전 가입' }}</dd>
+    </dl>
+  </section>
+
+  {% if target.active %}
+  <section class="panel">
+    <h2>권한</h2>
+    <form method="post" action="{{ url_for('admin_set_permit', user_id=target.id) }}" class="adm-permit">
+      {% for key, label in permits.items() %}
+        <label class="au-opt"><input type="radio" name="permit" value="{{ key }}" {{ 'checked' if target.permit == key }}
+               {{ 'disabled' if target.id == user.id and key != 'ADMIN' }}>
+          <span><b aria-hidden="true">{{ '👑' if key == 'ADMIN' else '🙂' }}</b>{{ label }}</span></label>
+      {% endfor %}
+      <button class="go acct-save">권한 저장</button>
+    </form>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">관리자는 회원 목록·상세를 보고 권한을 바꾸거나 탈퇴 처리할 수 있어요.
+      {% if target.id == user.id %}자기 자신의 관리자 권한은 뺄 수 없어요.{% endif %}</p>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>게임 기록 <span class="muted" style="font-size:13px;font-weight:400">최근 {{ games|length }}판</span></h2>
+    {% if games %}
+    <div class="tbl-wrap"><table>
+      <tr><th style="text-align:left">#</th><th style="text-align:left">상태</th><th>진행</th><th>최종 자산</th><th>수익률</th><th>거래</th><th>시작</th></tr>
+      {% for g in games %}
+      <tr>
+        <td style="text-align:left">{{ g.id }}</td><td style="text-align:left">{{ statuses[g.status] }}</td>
+        <td>D{{ g.day }}/{{ g.max_day }}</td>
+        <td>{{ (g.final_total|won ~ '원') if g.final_total else '-' }}</td>
+        <td class="{{ 'up' if g.pct and g.pct > 0 else ('down' if g.pct and g.pct < 0 else '') }}">{{ (g.pct|pct(2) ~ '%') if g.pct is not none else '-' }}</td>
+        <td>{{ g.trades }}회</td><td class="muted">{{ g.started_at.strftime('%y.%m.%d') }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<div class="empty">게임 기록이 없어요.</div>{% endif %}
+  </section>
+
+  {% if target.active and target.id != user.id %}
+  <section class="panel acct-danger">
+    <h2>탈퇴 처리</h2>
+    <p class="muted" style="margin-top:0">save_status를 N으로 바꾸고 <b>아이디·닉네임·이메일·비밀번호를 지워요.</b>
+      게임 기록은 누구인지 알 수 없는 상태로 남고 명예의 전당에서 빠져요. 되돌릴 수 없어요.</p>
+    <details>
+      <summary>탈퇴 처리하기</summary>
+      <form method="post" action="{{ url_for('admin_withdraw', user_id=target.id) }}" class="acct-form"
+            onsubmit="return confirm('회원 #{{ target.id }}을(를) 탈퇴 처리할까요? 되돌릴 수 없어요.')">
+        <label class="au-agree"><input type="checkbox" name="confirm" required>
+          <span>개인정보가 지워지고 되돌릴 수 없다는 것을 확인했어요.</span></label>
+        <button class="go acct-del">탈퇴 처리</button>
+      </form>
+    </details>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

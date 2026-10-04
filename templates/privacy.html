@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}개인정보 처리방침{% endblock %}
+{% block body %}
+<div class="doc">
+  <h1>개인정보 처리방침</h1>
+  <p class="muted">주식 시뮬레이터(이하 "서비스")는 가상 자금으로 투자 판단을 연습하는 교육용 게임입니다.
+    실제 돈이나 실제 증권 계좌와는 연결되지 않습니다.</p>
+
+  <section class="panel">
+    <h2>1. 모으는 정보</h2>
+    <div class="tbl-wrap"><table class="doc-tbl">
+      <tr><th>구분</th><th>항목</th><th>목적</th></tr>
+      <tr><td>필수</td><td>아이디, 비밀번호</td><td>로그인. 비밀번호는 되돌릴 수 없는 방식(scrypt 해시)으로만 저장합니다</td></tr>
+      <tr><td>필수</td><td>닉네임</td><td>화면과 명예의 전당에 표시 (아이디는 다른 사람에게 보이지 않습니다)</td></tr>
+      <tr><td>필수</td><td>투자 경험</td><td>코칭 문구의 눈높이 조절, 명예의 전당 구분</td></tr>
+      <tr><td>필수</td><td>게임 기록 (주문·체결·자산 변화)</td><td>게임 진행, 투자 성향 분석, 순위</td></tr>
+      <tr><td>선택</td><td>이메일</td><td>비밀번호 찾기 메일 발송. 적지 않아도 가입·이용할 수 있습니다</td></tr>
+      <tr><td>자동</td><td>로그인 실패 횟수와 접속 IP</td><td>비밀번호 대입 공격 방지 (최대 1시간 뒤 자동 삭제)</td></tr>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. 보관 기간과 파기</h2>
+    <ul>
+      <li>회원 탈퇴를 하면 <b>아이디·닉네임·이메일·비밀번호를 즉시</b> 지웁니다. (내 정보 → 회원 탈퇴)</li>
+      <li>게임 기록(매매·자산 변화)은 누구의 것인지 알 수 없는 상태로 남겨 게임 통계에만 씁니다.
+        명예의 전당 등 다른 사람에게는 보이지 않습니다.</li>
+      <li>로그인 실패 기록 등 보안용 정보는 15분~1시간 뒤 자동으로 지워집니다.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>3. 열람 권한</h2>
+    <p>회원 정보는 운영자가 관리자 권한을 준 사람만 볼 수 있고, 서비스 운영(문의 처리, 부정 이용 대응)에만 씁니다.</p>
+  </section>
+
+  <section class="panel">
+    <h2>4. 제3자 제공과 위탁</h2>
+    <p>모은 정보를 다른 곳에 팔거나 제공하지 않습니다. 비밀번호 찾기 메일은 운영자가 설정한 메일 발송 서비스를 거쳐 보내집니다.</p>
+  </section>
+
+  <section class="panel">
+    <h2>5. 이용자의 권리</h2>
+    <ul>
+      <li>내 정보 화면에서 닉네임·투자 경험·이메일을 언제든 고치거나 이메일을 지울 수 있습니다.</li>
+      <li>언제든 탈퇴해 개인정보를 지울 수 있습니다.</li>
+      <li>동의를 거부할 권리가 있으며, 필수 항목에 동의하지 않으면 가입할 수 없습니다.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>6. 문의</h2>
+    <p>{% if contact %}개인정보 관련 문의: <b>{{ contact }}</b>{% else %}개인정보 관련 문의는 서비스 운영자에게 해 주세요.{% endif %}</p>
+  </section>
+  {% if not user %}<p><a class="more" href="{{ url_for('register') }}">← 회원가입으로</a></p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+flask==3.1.*
+gunicorn==23.*
+requests>=2.31
+psycopg[binary]==3.2.*
+psycopg-pool==3.2.*
+finance-datareader
+pandas

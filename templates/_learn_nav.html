@@ -1,0 +1,9 @@
+{# 투자 공부 하위 탭 #}
+<nav class="lnav" aria-label="투자 공부">
+  <a href="{{ url_for('learn') }}#lab" data-tab="lab">🧪 요인 실험실</a>
+  <a href="{{ url_for('factors') }}" class="{{ 'on' if endpoint == 'factors' }}">📖 가격변동 요인</a>
+  <a href="{{ url_for('learn_news') }}" class="{{ 'on' if endpoint == 'learn_news' }}">📰 오늘의 뉴스</a>
+  <a href="{{ url_for('learn') }}#tips" data-tab="tips">💡 투자 팁</a>
+  <a href="{{ url_for('learn') }}#quiz" data-tab="quiz">✏️ 퀴즈</a>
+  <a href="{{ url_for('game_style') }}" class="{{ 'on' if endpoint == 'game_style' }}">📊 내 투자 성향</a>
+</nav>

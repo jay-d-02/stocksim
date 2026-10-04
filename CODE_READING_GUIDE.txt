@@ -1,0 +1,221 @@
+================================================================================
+ stocksim 코드 분석 가이드 — 읽는 순서와 방법
+================================================================================
+
+이 프로젝트는 4개 층으로 되어 있다. 안쪽(도메인)에서 바깥쪽(화면)으로 읽는다.
+
+   [브라우저/JS]  →  [API/화면 라우터]  →  [서비스]  →  [도메인 엔진]
+   templates/        server/api/          server/       simulator/
+   static/           server/web/          services/     (웹·DB 모르는 순수 파이썬)
+                                             │
+                                  PostgreSQL(원본: 돈·기록) + Redis(장중 상태)
+
+핵심 원칙 하나만 기억하고 시작하자:
+  "시장은 (시드, 날, 틱)으로만 결정되고, 돈은 PostgreSQL이 원본이다."
+대부분의 설계 결정이 이 문장에서 나온다.
+
+
+--------------------------------------------------------------------------------
+ 0단계. 전체 그림 잡기 (30분)
+--------------------------------------------------------------------------------
+읽을 것
+  1. README.md               — 아키텍처 표, 저장소 역할 분담, "설계에서 신경 쓴 점"
+  2. docs/database.md        — ERD, 제약조건, 주문 트랜잭션 흐름
+  3. docs/performance.md     — 왜 Redis를 쓰는지 (DB 쓰기량 1/25)
+  4. docker-compose.yml, Dockerfile, .env.example — 무엇이 어떻게 뜨는지
+
+직접 해 보기
+  - docker compose up  →  http://localhost:8000 에서 게임을 한 판 조금 해 본다.
+    (틱 진행, 뉴스 보기, 매수/매도, 장 마감, 다음 날)
+  - http://localhost:8000/docs (Swagger) 에서 로그인 후 API를 직접 호출해 본다.
+    "화면에서 누른 버튼 = 어떤 API 호출"인지 대응시키면 이후 읽기가 쉬워진다.
+
+정리할 질문
+  - 게임 한 판의 수명: 생성 → 틱 반복 → 장 마감 → 다음 날 → 15일 또는 30일(max_day) 후 종료 → 분석
+
+
+--------------------------------------------------------------------------------
+ 1단계. 도메인: 게임 규칙 (simulator/)  ★ 가장 중요
+--------------------------------------------------------------------------------
+순서
+  1. simulator/catalog.py   — 종목 12개, 업종별 금리·환율·유가·경기 민감도, 사건 목록.
+                              "게임 규칙의 숫자"만 있는 파일. 훑어보며 데이터 모양을 익힌다.
+  2. simulator/ledger.py    — 매매 계산(Decimal). 짧고 독립적이라 먼저 완전히 이해하기 좋다.
+                              buy / sell / charge / max_buy_qty / OrderRejected / FeeSchedule
+  3. simulator/engine.py    — 시장 진행. 아래 순서로 따라간다.
+       new_game()      게임 상태(dict) 생성 — 이 dict의 키 구조를 종이에 적어 둘 것
+       begin_day()     장 시작, 오늘의 사건 계획(plan) 세우기
+       step_tick()     5분 진행: 사건 공개, 가격 변동, 15:30 마감
+       _close_day()    마감 처리
+       _schedule_random / _setup_issue / _clue / _notice / _resolve
+                       예고 사건·단서·결과가 어떻게 이어지는지
+       event_impacts / _add_effect   사건 → 종목별 가격 영향 (즉시 반응 + 며칠에 걸친 반영)
+       execute_order / trade         엔진 상태에 체결 반영 (내부에서 ledger 사용)
+       snapshot()      화면에 내보내는 상태 — 미래 정보가 빠지는 지점
+  4. simulator/analysis.py  — analyze() → _performance, _trade_habits, _news_habits,
+                              _clue_habits, _timing → _profile → _coach 순서로 읽는다.
+
+방법
+  - engine.py는 크다(약 600줄). 처음엔 new_game → begin_day → step_tick 세 함수만
+    따라가고, 호출되는 _함수는 "무엇을 하는지" 한 줄로만 메모한 뒤 나중에 들어간다.
+  - 상태 dict(st)의 키(prices, intra, hl, news, nmeta, holdings, trades, equity,
+    phase, tick, day, finished …)가 어디서 만들어지고 어디서 바뀌는지 표로 정리한다.
+  - 파이썬 REPL에서 직접 돌려 본다 (DB·Redis 불필요):
+        python
+        >>> from simulator import engine as E
+        >>> st = E.new_game(10_000_000, seed=1)
+        >>> E.begin_day(st); E.step_tick(st)
+        >>> st.keys(); st["news"][-3:]; E.snapshot(st).keys()
+  - "같은 시드면 같은 시장인가?", "snapshot에 앞으로 일어날 사건이 안 나가는가?"를
+    스스로 확인해 본다. (tests/test_engine.py 가 정답지)
+
+함께 읽을 테스트
+  tests/test_ledger.py, tests/test_engine.py, tests/test_analysis.py
+  → 테스트 이름만 먼저 쭉 읽어도 "이 코드가 보장하려는 것" 목록이 된다.
+  → pytest tests/test_ledger.py tests/test_engine.py tests/test_analysis.py
+    (통합 테스트는 DATABASE_URL이 없으면 자동으로 건너뛴다)
+
+
+--------------------------------------------------------------------------------
+ 2단계. 저장: 테이블과 설정 (server/models.py, migrations/, config)
+--------------------------------------------------------------------------------
+순서
+  1. server/config.py         — 설정값 (start_cash, fee_rate, tax_rate, DB/Redis URL …)
+  2. server/db.py             — SQLAlchemy 엔진·세션
+  3. server/models.py         — 13개 테이블. docs/database.md 의 ERD를 옆에 띄워 놓고 대조.
+                                특히 CheckConstraint, 부분 유니크 인덱스(진행 중 게임 1개)를 본다.
+  4. migrations/versions/0001 → 0005  — 스키마가 어떤 순서로 바뀌어 왔는지
+  5. server/runtime.py        — Redis 저장소. game:{id}:state 키 하나에 엔진 상태 JSON 통째로.
+
+정리할 질문
+  - 엔진 상태 dict 중 어떤 값이 어느 테이블로 가는가? (→ 3단계에서 확인)
+  - Redis가 날아가면 무엇으로 복구하는가? (game_snapshots)
+
+
+--------------------------------------------------------------------------------
+ 3단계. 서비스: 엔진 + DB + Redis 조합 (server/services/games.py)  ★ 두 번째로 중요
+--------------------------------------------------------------------------------
+GameService 를 아래 순서로 읽는다.
+  1. _get(lock=True)        SELECT … FOR UPDATE 로 게임 행 잠금 → 같은 게임 요청은 한 줄로 선다
+  2. state()                Redis에서 읽기, 없으면 _recover()
+  3. _reconcile()           돈(예수금·보유·체결)을 DB 값으로 덮어쓰기
+  4. _recover()             스냅샷에서 current_tick 까지 step_tick 재실행 (결정적 시장이라 가능)
+  5. _save()                Redis 저장 → 커밋, 커밋 실패하면 Redis 삭제
+  6. _persist_news / _save_snapshot / _persist_close   엔진 상태 → 테이블
+  7. 유스케이스: create → tick → next_day → place_order
+       place_order 는 반드시 한 줄씩: 중복(client_order_id) 확인 → 엔진 체결 → 거부면
+       사유 기록 후 커밋 → 체결이면 Holding upsert + Trade insert → _save
+  8. 조회 메서드들, leaderboard()
+
+방법
+  - "매수 버튼 한 번"을 끝까지 추적하는 시퀀스를 직접 그려 본다:
+      static/desk.js (fetch) → server/api/games.py place_order
+      → GameService.place_order → engine.execute_order → ledger.buy
+      → Holding/Order/Trade 저장 → Redis put → commit → 응답(201/422/200)
+  - 같은 방식으로 "틱 한 번"(POST /tick)도 추적한다.
+  - 읽으면서 "여기서 프로세스가 죽으면 돈이 틀어지나?"를 매 줄마다 물어본다.
+    README의 일관성 설명과 코드가 일치하는지 확인하는 것이 이 단계의 목표.
+
+함께 읽을 테스트
+  tests/api/test_orders.py      (동시 주문 초과 지출 방지)
+  tests/api/test_persistence.py (Redis 유실 복구, 제약조건)
+  tests/api/test_games.py
+
+
+--------------------------------------------------------------------------------
+ 4단계. API와 인증 (server/api/, server/security.py, server/schemas.py)
+--------------------------------------------------------------------------------
+순서
+  1. server/schemas.py        — Pydantic 입출력 모델 (OrderIn 등)
+  2. server/security.py       — 비밀번호 해시, 세션 로그인, current_user / admin_user 의존성
+  3. server/api/deps.py       — game_service 의존성 주입
+  4. server/api/games.py      — 엔드포인트는 얇다. 서비스 호출 + 응답 변환만 하는지 확인
+  5. server/api/auth.py + server/services/accounts.py  — 가입·로그인 잠금·탈퇴·비밀번호 재설정
+  6. server/api/admin.py      — permit = ADMIN 검사
+  7. server/ratelimit.py, server/mail.py
+  8. server/main.py           — 전부 조립: 미들웨어, 라우터, 예외 → HTTP 코드 매핑
+
+정리할 질문
+  - 남의 게임을 요청하면 왜 403이 아니라 404인가? (_get 과 NotFound 핸들러)
+  - 예외(NotFound/Conflict/AccountError/LoginRequired)가 API면 JSON, 화면이면 리다이렉트로
+    갈리는 곳은 어디인가? (main.py)
+
+함께 읽을 테스트
+  tests/api/test_auth.py, test_accounts.py, test_admin.py
+
+
+--------------------------------------------------------------------------------
+ 5단계. 화면 (server/web/, templates/, static/)
+--------------------------------------------------------------------------------
+순서
+  1. server/web/templating.py  — Jinja2 설정, flash 메시지
+  2. server/web/pages.py       — URL ↔ 템플릿 대응표를 만든다
+  3. templates/base.html       — 공통 레이아웃 (모든 페이지의 뼈대)
+  4. templates/game.html + static/desk.js  — 게임 데스크. desk.js 에서 fetch 호출을
+                                            전부 찾아(Ctrl+F "fetch") API 목록과 대조한다
+  5. 나머지 페이지: learn.html + learn.js(요인 실험실), factors.html, replay.html,
+     ranking.html, account.html, auth.html, admin_*.html
+  6. static/style.css          — :root 의 공통 다크 토큰(--bg, --panel, --ink …)
+  7. static/sw.js, offline.html, tour.js, app.js  — PWA, 첫 방문 안내
+
+방법
+  - 브라우저 개발자 도구(F12) Network 탭을 켜고 게임을 진행하며, 요청이 desk.js 어디서
+    나가는지 Initiator 로 따라간다.
+
+함께 읽을 테스트
+  tests/api/test_pages.py
+
+
+--------------------------------------------------------------------------------
+ 6단계. 운영·부가 요소 (필요할 때)
+--------------------------------------------------------------------------------
+  - scripts/ensure_db.py, set_permit.py, import_legacy_users.py, profile_tick.py
+  - .github/workflows/ci.yml   — CI에서 무엇을 검사하는지
+  - deploy/tailscale/, docker-compose.yml 의 profile(funnel/cloudflare/tunnel/test)
+  - legacy/flask_app/          — 이전 버전. 지금 구조와 비교할 때만 참고 (분석 우선순위 최하)
+
+
+================================================================================
+ 전반적인 분석 방법 (모든 단계 공통)
+================================================================================
+1. 테스트를 먼저 읽는다
+   테스트 이름 = 요구사항 목록이다. 코드를 읽기 전에 해당 테스트 파일을 훑으면
+   "이 함수가 무엇을 지켜야 하는지"를 알고 읽게 된다.
+
+2. 하나의 요청을 끝까지 추적한다
+   파일을 위에서 아래로 다 읽기보다, "매수 한 번", "틱 한 번", "Redis 삭제 후 복구"처럼
+   시나리오 하나를 잡고 호출 경로를 따라가며 메모한다.
+
+3. 직접 바꿔서 깨뜨려 본다
+   README에 적힌 실험을 그대로 해 본다:
+     - ledger.py 평균 매수가 공식을 틀리게 바꾸기
+     - 원 미만 버림(ROUND_DOWN)을 반올림으로 바꾸기
+     - services/games.py 의 with_for_update() 빼기
+   → 어떤 테스트가 실패하는지 보면 그 코드의 존재 이유가 보인다. (끝나면 되돌리기)
+
+4. 상태 dict 지도를 만든다
+   엔진 state 의 키마다 [만드는 곳 / 바꾸는 곳 / 저장되는 테이블 / 화면에 나가는지]를
+   표로 정리한다. 이 표 하나가 프로젝트 전체 이해의 뼈대가 된다.
+
+5. 메모 템플릿 (파일마다)
+     - 이 파일의 책임 한 줄:
+     - 주요 함수와 호출 관계:
+     - 입력 / 출력 / 부작용(DB·Redis 쓰기):
+     - 지키는 불변식(돈, 공정성, 결정성):
+     - 이해 안 된 부분 / 질문:
+
+6. 도구
+   - IDE의 "정의로 이동(F12)", "모든 참조 찾기(Shift+F12)"
+   - 테스트 실행:  docker compose --profile test run --rm tests
+                  (도메인 테스트만: pytest tests/test_*.py)
+   - 특정 테스트:  pytest tests/test_engine.py -k 시드 -v
+
+
+================================================================================
+ 추천 일정 (예시)
+================================================================================
+  1일차  0단계 + ledger.py + catalog.py + test_ledger.py
+  2일차  engine.py (new_game / begin_day / step_tick) + test_engine.py + REPL 실험
+  3일차  engine.py 사건·단서 흐름 + analysis.py
+  4일차  models.py + runtime.py + services/games.py (매수·틱 추적)
+  5일차  API·인증·main.py + 화면(desk.js) + 깨뜨려 보기 실험

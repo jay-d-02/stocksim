@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}내 투자 성향{% endblock %}
+{% macro signed_pct(v, d=1) %}<span class="{{ 'up' if v > 0.05 else ('down' if v < -0.05 else '') }}">{{ v|pct(d) }}%</span>{% endmacro %}
+{% macro pctv(v) %}{{ '-' if v is none else ('%.0f'|format(v * 100)) ~ '%' }}{% endmacro %}
+{% block body %}
+{% include "_learn_nav.html" %}
+
+<div class="sty-head">
+  <div>
+    <h1>내 투자 성향</h1>
+    <p class="muted" style="margin:0">{{ '끝난 게임' if a.finished else '진행 중인 게임' }} · D{{ a.day }}까지 · 거래 {{ a.n_trades }}회</p>
+  </div>
+  <div class="sty-actions">
+    {# 코칭 눈높이: 거래가 적어 분석 전이어도 언제든 바꿀 수 있게 머리글에 #}
+    <form method="post" action="{{ url_for('game_style_level') }}" class="lvl" aria-label="코칭 눈높이">
+      {% set icons = {'beginner': '🌱', 'intermediate': '📈', 'expert': '🦈'} %}
+      {% for key, label in experience.items() %}
+        <button name="experience" value="{{ key }}" class="{{ 'on' if a.level == key }}"
+                aria-pressed="{{ 'true' if a.level == key else 'false' }}" title="{{ label }}">
+          <span aria-hidden="true">{{ icons[key] }}</span>{{ {'beginner': '초보', 'intermediate': '중수', 'expert': '고수'}[key] }}
+        </button>
+      {% endfor %}
+    </form>
+    <a class="btn-main" href="{{ url_for('game_home') }}">게임으로 →</a>
+  </div>
+</div>
+
+{% if not a.ready %}
+<section class="panel sty-wait">
+  <div class="sty-emoji">🔍</div>
+  <h2>아직 분석할 거래가 부족해요</h2>
+  <p class="muted">거래가 {{ min_trades }}번 이상 쌓이면 투자 성향을 알려 드립니다. 지금 {{ a.n_trades }}번 거래했어요.</p>
+</section>
+{% else %}
+<section class="panel sty-hero">
+  <div class="sty-emoji">{{ a.persona[0] }}</div>
+  <div>
+    <div class="muted" style="font-size:13px">당신의 투자 스타일</div>
+    <h2>{{ a.persona[1] }}</h2>
+    <p>{{ a.persona[2] }}</p>
+    {% if a.traits %}<div class="traits">{% for e, t in a.traits %}<span>{{ e }} {{ t }}</span>{% endfor %}</div>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+{# 초보: 용어 풀이를 타일 아래에 / 고수: 손익비·베타·거래 빈도 타일 추가 #}
+{% set beginner = a.level == 'beginner' %}
+{% macro hint(text) %}{% if beginner %}<small class="tile-hint">{{ text }}</small>{% endif %}{% endmacro %}
+<div class="tiles">
+  <div class="panel tile"><span>내 수익률</span><b>{{ signed_pct(a.ret) }}</b>{{ hint('처음 돈보다 얼마나 늘었나') }}</div>
+  <div class="panel tile"><span>시장(종합지수)</span><b>{{ signed_pct(a.mkt) }}</b>{{ hint('전체 주식시장이 움직인 만큼') }}</div>
+  <div class="panel tile"><span>시장 대비</span><b>{{ signed_pct(a.excess) }}<small>p</small></b>{{ hint('+면 시장보다 잘한 것') }}</div>
+  <div class="panel tile"><span>최대 낙폭</span><b>{{ signed_pct(a.mdd) }}</b>{{ hint('가장 높았을 때보다 가장 많이 떨어진 폭') }}</div>
+  <div class="panel tile"><span>승률</span><b>{{ pctv(a.win_rate) }}</b><small class="muted">판 거래 {{ a.n_sells }}번</small>{{ hint('팔았을 때 이익 본 비율') }}</div>
+  <div class="panel tile"><span>평균 보유 시간</span><b>{{ fmt_hold(a.hold_all) }}</b>{{ hint('사서 팔 때까지 걸린 시간') }}</div>
+  {% if a.level == 'expert' %}
+  <div class="panel tile"><span>손익비</span><b>{{ '%.2f'|format(a.payoff) if a.payoff is not none else '-' }}</b>
+    <small class="muted">{% if a.payoff is not none %}평균 이익률 ÷ 평균 손실률
+      {% elif not a.n_sells %}판 거래가 없어 계산 전
+      {% elif not a.n_wins %}이익 난 매도가 아직 없음
+      {% else %}손실 난 매도가 없음 (계산 불가){% endif %}</small></div>
+  <div class="panel tile"><span>계좌 베타</span><b>{{ '%.2f'|format(a.beta or 0) }}</b><small class="muted">현금 포함 장중 평균</small></div>
+  <div class="panel tile"><span>하루 거래</span><b>{{ '%.1f'|format(a.tpd) }}<small>회</small></b><small class="muted">수수료·세금 {{ '%.2f'|format(a.fee_pct) }}%</small></div>
+  {% endif %}
+</div>
+
+<div class="grid two">
+  <div class="grid" style="align-content:start">
+    {% if a.ready %}
+    <section class="panel">
+      <h2>성향 지도</h2>
+      {% for x in a.axes %}
+      <div class="axis">
+        <div class="axis-h"><b>{{ x.name }}</b><span class="muted">{{ x.note }}</span></div>
+        <div class="axis-bar"><i style="left:{{ '%.1f'|format(x.v) }}%"></i></div>
+        <div class="axis-l"><span>{{ x.lo }}</span><span>{{ x.hi }}</span></div>
+      </div>
+      {% endfor %}
+      <p class="muted" style="font-size:12px;margin:10px 0 0">좋고 나쁨이 아니라 방향입니다. 어느 쪽이든 그에 맞는 위험 관리가 필요합니다.</p>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>내 자산 vs 시장</h2>
+      {% if a.curve|length > 1 %}
+      <div class="chart-box" style="height:260px"><canvas id="eq" aria-label="게임 시작 대비 내 자산과 종합지수 수익률"></canvas></div>
+      <details class="tview"><summary>표로 보기</summary>
+        <div class="tbl-wrap"><table><tr><th>날</th><th>내 자산</th><th>종합지수</th></tr>
+          {% for p in a.curve %}<tr><td>D{{ p.day }}</td><td>{{ p.me|pct(2) }}%</td><td>{{ p.mkt|pct(2) }}%</td></tr>{% endfor %}
+        </table></div></details>
+      {% else %}
+      <div class="empty">첫 거래일이 끝나면 그래프가 그려집니다.</div>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>매매 습관</h2>
+      <div class="habits">
+        <div>
+          <h3 class="h3">💸 손익</h3>
+          <dl>
+            <dt>이익 거래 평균</dt><dd>{{ signed_pct(a.avg_win) if a.avg_win is not none else '-' }}</dd>
+            <dt>손실 거래 평균</dt><dd>{{ signed_pct(a.avg_loss) if a.avg_loss is not none else '-' }}</dd>
+            <dt>이익 난 종목 보유</dt><dd>{{ fmt_hold(a.hold_win) }}</dd>
+            <dt>손실 난 종목 보유</dt><dd>{{ fmt_hold(a.hold_loss) }}{% if a.disposition %} <span class="flag">⚠ 더 김</span>{% endif %}</dd>
+            <dt>실현 손익</dt><dd class="{{ 'up' if a.realized > 0 else ('down' if a.realized < 0 else '') }}">{{ a.realized|signed }}원</dd>
+            <dt>수수료·세금</dt><dd>{{ a.fees|won }}원 <small class="muted">({{ '%.2f'|format(a.fee_pct) }}%)</small></dd>
+          </dl>
+        </div>
+        <div>
+          <h3 class="h3">📰 뉴스 반응</h3>
+          <dl>
+            <dt>뉴스 30분 안 거래</dt><dd>{{ a.reactive }}번 <small class="muted">({{ '%.0f'|format(a.react_share * 100) }}%)</small></dd>
+            <dt>뉴스 방향대로</dt><dd>{{ pctv(a.follow_share) }}</dd>
+            <dt>이미 오른 뒤 매수</dt><dd>{{ a.chase }} / {{ a.react_buys }}번{% if a.chase_share is not none and a.chase_share >= 0.5 and a.chase >= 2 %} <span class="flag">⚠</span>{% endif %}</dd>
+            <dt>소문 보고 매수</dt><dd>{{ a.rumor }}번{% if a.rumor %} <span class="flag">⚠</span>{% endif %}</dd>
+            <dt>나쁜 단서 무시하고 매수</dt><dd>{{ a.clue_ignored }}번{% if a.clue_ignored %} <span class="flag">⚠</span>{% endif %}</dd>
+            <dt>단서 읽고 맞게 매매</dt><dd>{{ a.clue_heeded }}번</dd>
+            <dt>예고 일정 활용</dt><dd>{{ a.planned }}번</dd>
+            <dt>임상 발표 때 바이오 비중</dt><dd>{{ '%.0f'|format(a.binary * 100) }}%</dd>
+          </dl>
+        </div>
+      </div>
+      <h3 class="h3" style="margin-top:16px">⏱ 타이밍 <span class="muted" style="font-weight:400">— 그날 가격 범위 중 어디서 사고팔았나</span></h3>
+      {% for lbl, v, good in [('매수', a.buy_pos, '낮을수록 좋음'), ('매도', a.sell_pos, '높을수록 좋음')] %}
+      <div class="axis">
+        <div class="axis-h"><b>{{ lbl }} 위치</b><span class="muted">{{ pctv(v) if v is not none else '마감된 날의 거래가 없음' }} · {{ good }}</span></div>
+        <div class="axis-bar range-hl">{% if v is not none %}<i style="left:{{ '%.1f'|format(v * 100) }}%"></i>{% endif %}</div>
+        <div class="axis-l"><span>그날 최저가</span><span>그날 최고가</span></div>
+      </div>
+      {% endfor %}
+    </section>
+  </div>
+
+  <div class="grid" style="align-content:start">
+    {% if a.ready %}
+    <section class="panel coach">
+      <div class="coach-h">
+        <h2>코칭</h2>
+        <span class="muted" style="font-size:12px">{{ experience[a.level] }} 눈높이</span>
+      </div>
+      {% for p in a.praise %}<div class="praise">👍 {{ p }}</div>{% endfor %}
+      {% for c in a.coach %}
+      <article>
+        <h3>{{ c.title }}</h3>
+        <p>{{ c.body }}</p>
+        {% if c.try %}<div class="try"><b>다음 판에서는</b>{{ c.try }}</div>{% endif %}
+        <a class="more" href="{{ url_for('learn') }}#{{ c.tip }}">관련 투자 팁 →</a>
+      </article>
+      {% endfor %}
+      {% if not a.coach %}<p class="muted" style="margin:0">눈에 띄게 고칠 습관이 없어요. 이대로 계속해 보세요!</p>{% endif %}
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>업종 비중 <span class="muted" style="font-size:13px;font-weight:400">장중 평균, 전체 자산 대비</span></h2>
+      {% set cash_pct = (a.cash_ratio or 0) * 100 %}
+      <div class="hbars">
+        {% for s, v in a.sectors %}
+        <div class="hrow"><span>{{ s }}</span><i><em style="width:{{ '%.1f'|format(v) }}%"></em></i><b>{{ '%.1f'|format(v) }}%</b></div>
+        {% endfor %}
+        <div class="hrow cash"><span>현금</span><i><em style="width:{{ '%.1f'|format(cash_pct) }}%"></em></i><b>{{ '%.1f'|format(cash_pct) }}%</b></div>
+      </div>
+    </section>
+
+    {% if a.best %}
+    <section class="panel">
+      <h2>가장 잘한 거래 · 아쉬운 거래</h2>
+      <ul class="news">
+        {% for lbl, s in [('최고', a.best), ('최악', a.worst)] %}
+        <li><b>{{ lbl }}</b> {{ s.name }} {{ s.qty|won }}주 매도 · D{{ s.day }} {{ s.time }}
+          <span class="{{ 'up' if s.profit > 0 else ('down' if s.profit < 0 else '') }}" style="display:inline;font-size:14px">{{ s.profit|signed }}원 ({{ s.pct|pct }}%)</span>
+          <span class="muted">보유 {{ fmt_hold(s.hold) }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>지난 게임</h2>
+      {% if past %}
+      <div class="tbl-wrap"><table>
+        <tr><th style="text-align:left">날짜</th><th style="text-align:left">스타일</th><th>수익률</th><th>시장 대비</th><th>거래</th><th></th></tr>
+        {% for r in past %}
+        {% set p = r.profile %}
+        <tr>
+          <td style="text-align:left">{{ r.finished_at.strftime('%m/%d') }}</td>
+          <td style="text-align:left">{% if p and p.ready %}{{ p.persona[0] }} {{ p.persona[1] }}{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td class="{{ 'up' if r.pct > 0 else ('down' if r.pct < 0 else '') }}">{{ r.pct|pct }}%</td>
+          <td>{% if p %}{{ signed_pct(p.excess) }}p{% else %}-{% endif %}</td>
+          <td>{{ r.trades }}회</td>
+          <td><a class="more" style="margin:0" href="{{ url_for('game_replay', game_id=r.id) }}">복기 →</a></td>
+        </tr>
+        {% endfor %}
+      </table></div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">판을 거듭하며 스타일이 어떻게 바뀌는지 비교해 보세요.</p>
+      {% else %}
+      <div class="empty">끝까지 마친 게임이 쌓이면 여기에서 비교할 수 있습니다.</div>
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+{% if a.curve|length > 1 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const curve = {{ a.curve|tojson }};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();   // 공통 색(style.css의 :root)
+Chart.defaults.color = css('--sub'); Chart.defaults.borderColor = css('--line');
+new Chart(document.getElementById('eq'), {
+  type: 'line',
+  data: { labels: curve.map(p => 'D' + p.day), datasets: [
+    { label: '내 자산', data: curve.map(p => p.me), borderColor: css('--brand'), backgroundColor: css('--brand'),
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: .15 },
+    { label: '종합지수', data: curve.map(p => p.mkt), borderColor: css('--sub'), backgroundColor: css('--sub'),
+      borderWidth: 2, borderDash: [5, 4], pointRadius: 0, pointHoverRadius: 4, tension: .15 } ] },
+  options: { maintainAspectRatio: false, animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 14, boxHeight: 2 } },
+      tooltip: { callbacks: { label: c => ` ${c.dataset.label} ${c.parsed.y > 0 ? '+' : ''}${c.parsed.y.toFixed(2)}%` } } },
+    scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+              y: { ticks: { callback: v => (v > 0 ? '+' : '') + v + '%' } } } }
+});
+</script>
+{% endif %}
+{% endblock %}

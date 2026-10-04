@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}내 정보{% endblock %}
+{% block body %}
+{% set icons = {'beginner': '🌱', 'intermediate': '📈', 'expert': '🦈'} %}
+<div class="acct">
+  <div class="acct-head">
+    <div class="acct-avatar" aria-hidden="true">{{ icons[user.experience] }}</div>
+    <div>
+      <h1>{{ user.nickname }}</h1>
+      <p class="muted" style="margin:0">아이디 {{ user.username }} · {{ user.created_at.strftime('%Y.%m.%d') }} 가입</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2>프로필</h2>
+    <form method="post" action="{{ url_for('account_profile') }}" class="acct-form">
+      <div class="au-field">
+        <label for="n">닉네임</label>
+        <input id="n" type="text" name="nickname" value="{{ user.nickname }}" required minlength="2" maxlength="20">
+        <small>명예의 전당과 상단에 보이는 이름이에요.</small>
+      </div>
+      <fieldset class="au-field au-exp">
+        <legend>투자 경험 <span class="muted" style="font-weight:400">— 코칭 눈높이가 바뀌어요</span></legend>
+        <div class="au-exp-opts">
+          {% for key, label in experience.items() %}
+            <label class="au-opt">
+              <input type="radio" name="experience" value="{{ key }}" {{ 'checked' if user.experience == key }}>
+              <span><b aria-hidden="true">{{ icons[key] }}</b>{{ label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="au-field">
+        <label for="e">이메일 <em>선택</em></label>
+        <input id="e" type="email" name="email" value="{{ user.email or '' }}" maxlength="254"
+               autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="me@example.com">
+        <small>{% if user.email %}비밀번호를 잊으면 이 주소로 재설정 링크를 보내요. 비우고 저장하면 지워져요.
+               {% else %}등록해 두면 비밀번호를 잊었을 때 찾을 수 있어요.{% endif %}</small>
+      </div>
+      <button class="go acct-save">저장</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>비밀번호 바꾸기</h2>
+    <form method="post" action="{{ url_for('account_password') }}" class="acct-form">
+      <div class="au-field">
+        <label for="cur">현재 비밀번호</label>
+        <input id="cur" type="password" name="current" required autocomplete="current-password">
+      </div>
+      <div class="acct-2col">
+        <div class="au-field">
+          <label for="np">새 비밀번호</label>
+          <input id="np" type="password" name="password" required minlength="8" maxlength="128"
+                 autocomplete="new-password" placeholder="8자 이상, 아이디와 다르게">
+        </div>
+        <div class="au-field">
+          <label for="np2">한 번 더</label>
+          <input id="np2" type="password" name="password2" required minlength="8" maxlength="128" autocomplete="new-password">
+        </div>
+      </div>
+      <small class="muted">바꾸면 이 기기만 로그인이 유지되고, 다른 기기의 로그인은 모두 끝나요.</small>
+      <button class="go acct-save">비밀번호 바꾸기</button>
+    </form>
+  </section>
+
+  <section class="panel acct-danger">
+    <h2>회원 탈퇴</h2>
+    <p class="muted" style="margin-top:0"><b>아이디·닉네임·이메일·비밀번호</b>가 바로 지워지고 다시 로그인할 수 없어요.
+      게임 기록은 누구인지 알 수 없는 상태로 통계에만 남고, 명예의 전당에서는 빠져요. 되돌릴 수 없어요.</p>
+    <details>
+      <summary>탈퇴하기</summary>
+      <form method="post" action="{{ url_for('account_delete') }}" class="acct-form"
+            onsubmit="return confirm('정말 탈퇴할까요? 개인정보가 지워지고 되돌릴 수 없어요.')">
+        <div class="au-field">
+          <label for="dp">비밀번호 확인</label>
+          <input id="dp" type="password" name="password" required autocomplete="current-password">
+        </div>
+        <label class="au-agree"><input type="checkbox" name="confirm" required>
+          <span>개인정보가 지워지고 되돌릴 수 없다는 것을 확인했어요.</span></label>
+        <button class="go acct-del">탈퇴</button>
+      </form>
+    </details>
+  </section>
+
+  <p class="muted" style="font-size:13px"><a href="{{ url_for('privacy') }}">개인정보 처리방침</a></p>
+</div>
+{% endblock %}

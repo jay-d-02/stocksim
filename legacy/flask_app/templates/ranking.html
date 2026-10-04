@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}수익률 순위{% endblock %}
+{% block body %}
+<h1>수익률 순위</h1>
+<p class="muted" style="margin:0 0 18px">이 서버에 가입한 사람들의 총 평가자산 기준입니다.</p>
+<section class="panel"><div class="tbl-wrap"><table>
+  <tr><th>순위</th><th style="text-align:left">아이디</th><th>총 평가자산</th><th>수익률</th></tr>
+  {% for b in board %}
+  <tr class="{{ 'rank-me' if b.me }}">
+    <td>{{ loop.index }}</td>
+    <td style="text-align:left">{{ b.name }}{{ ' (나)' if b.me }}</td>
+    <td>{{ b.total|won }}원</td>
+    <td class="{{ 'up' if b.pct>0 else ('down' if b.pct<0 else '') }}">{{ '%+.2f'|format(b.pct) }}%</td>
+  </tr>
+  {% endfor %}
+</table></div></section>
+{% endblock %}

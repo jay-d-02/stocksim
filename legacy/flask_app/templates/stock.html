@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block body %}
+{% set cls = 'up' if diff > 0 else ('down' if diff < 0 else '') %}
+<h1>{{ name }} <span class="code">{{ code }}</span></h1>
+<div class="quote">
+  <span class="p {{ cls }}" id="price">{{ cur|won }}</span>
+  <span class="d {{ cls }}" id="chg">{{ '▲' if diff > 0 else ('▼' if diff < 0 else '') }} {{ diff|abs|won }} ({{ '%+.2f'|format(pct) }}%)</span>
+  <span class="muted" style="font-size:13px" id="src">{{ source }} · {{ quoted_at }} 기준</span>
+</div>
+
+<div class="grid two">
+  <section class="panel">
+    <h2>최근 시세</h2>
+    <div class="chart-box"><canvas id="chart" aria-label="최근 종가 차트"></canvas></div>
+    {% if holding %}
+    {% set pl = (cur - holding.avg_price) * holding.qty %}
+    <div class="kv" style="margin:20px 0 0">
+      <div>보유 수량<b>{{ holding.qty|won }}주</b></div>
+      <div>평균단가<b>{{ holding.avg_price|won }}원</b></div>
+      <div>평가손익<b class="{{ 'up' if pl>0 else ('down' if pl<0 else '') }}">{{ pl|signed }}원</b></div>
+    </div>
+    {% endif %}
+  </section>
+
+  <aside class="panel">
+    <div class="tabs" role="tablist">
+      <button type="button" class="buy on" data-side="BUY">매수</button>
+      <button type="button" class="sell" data-side="SELL">매도</button>
+    </div>
+    <form method="post" action="{{ url_for('trade', code=code) }}" id="order">
+      <input type="hidden" name="side" id="side" value="BUY">
+      <label for="qty">수량 (주)</label>
+      <input type="number" id="qty" name="qty" min="1" value="1" required>
+      <div class="qbtns">
+        <button type="button" data-p="0.1">10%</button>
+        <button type="button" data-p="0.25">25%</button>
+        <button type="button" data-p="0.5">50%</button>
+        <button type="button" data-p="1">최대</button>
+      </div>
+      <div class="summary">
+        <div><span class="muted">주문 단가</span><span>{{ cur|won }}원</span></div>
+        <div><span class="muted">수수료</span><span id="s-fee">0원</span></div>
+        <div id="row-tax" hidden><span class="muted">거래세</span><span id="s-tax">0원</span></div>
+        <div class="tot"><span id="s-lbl">총 결제금액</span><span id="s-tot">0원</span></div>
+        <div><span class="muted" id="s-can-lbl">매수 가능</span><span id="s-can"></span></div>
+      </div>
+      <button class="go buy" id="go">매수하기</button>
+    </form>
+    <p class="muted" style="font-size:12px;margin:12px 0 0">시장가로 즉시 체결됩니다. 연습용이며 실제 주문이 아닙니다.</p>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const PRICE = {{ cur }}, FEE = {{ fee_rate }}, TAX = {{ tax_rate }};
+const MAXBUY = {{ max_buy }}, HOLD = {{ holding.qty if holding else 0 }};
+const fmt = n => Math.round(n).toLocaleString('ko-KR');
+let side = 'BUY';
+const $ = id => document.getElementById(id);
+
+function calc(){
+  const q = Math.max(0, parseInt($('qty').value) || 0);
+  const amt = PRICE * q, fee = Math.floor(amt * FEE);
+  const tax = side === 'SELL' ? Math.floor(amt * TAX) : 0;
+  $('s-fee').textContent = fmt(fee) + '원';
+  $('s-tax').textContent = fmt(tax) + '원';
+  $('row-tax').hidden = side !== 'SELL';
+  $('s-lbl').textContent = side === 'BUY' ? '총 결제금액' : '예상 정산금액';
+  $('s-tot').textContent = fmt(side === 'BUY' ? amt + fee : amt - fee - tax) + '원';
+  $('s-can-lbl').textContent = side === 'BUY' ? '매수 가능' : '매도 가능';
+  $('s-can').textContent = fmt(side === 'BUY' ? MAXBUY : HOLD) + '주';
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  side = b.dataset.side; $('side').value = side;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $('go').className = 'go ' + (side === 'BUY' ? 'buy' : 'sell');
+  $('go').textContent = side === 'BUY' ? '매수하기' : '매도하기';
+  calc();
+});
+document.querySelectorAll('.qbtns button').forEach(b => b.onclick = () => {
+  const base = side === 'BUY' ? MAXBUY : HOLD;
+  $('qty').value = Math.max(1, Math.floor(base * parseFloat(b.dataset.p)));
+  calc();
+});
+$('qty').oninput = calc; calc();
+
+const prices = {{ prices|tojson }};
+const up = prices[prices.length-1] >= prices[0];
+new Chart($('chart'), {
+  type: 'line',
+  data: { labels: {{ labels|tojson }}, datasets: [{ data: prices,
+    borderColor: up ? '#D8262F' : '#1D5BD6', borderWidth: 2, pointRadius: 0, tension: .15,
+    fill: true, backgroundColor: up ? 'rgba(216,38,47,.07)' : 'rgba(29,91,214,.07)' }] },
+  options: { maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false },
+      tooltip: { mode: 'index', intersect: false, callbacks: { label: c => fmt(c.parsed.y) + '원' } } },
+    interaction: { mode: 'index', intersect: false },
+    scales: { x: { ticks: { maxTicksLimit: 6 }, grid: { display: false } },
+              y: { ticks: { callback: v => fmt(v) } } } }
+});
+
+setInterval(async () => {
+  try {
+    const r = await fetch('{{ url_for("api_price", code=code) }}');
+    if (!r.ok) return;
+    const d = await r.json();
+    const c = d.diff > 0 ? 'up' : (d.diff < 0 ? 'down' : '');
+    $('price').textContent = fmt(d.price); $('price').className = 'p ' + c;
+    $('chg').textContent = (d.diff > 0 ? '▲ ' : d.diff < 0 ? '▼ ' : '') + fmt(Math.abs(d.diff)) +
+      ' (' + (d.pct > 0 ? '+' : '') + d.pct.toFixed(2) + '%)';
+    $('chg').className = 'd ' + c;
+    $('src').textContent = d.source + ' · ' + d.at + ' 기준';
+  } catch (e) {}
+}, 15000);
+</script>
+{% endblock %}

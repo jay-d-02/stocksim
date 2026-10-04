@@ -1,0 +1,151 @@
+# docker compose up          → 앱 + PostgreSQL + Redis (http://localhost:8000, API 문서 /docs)
+# docker compose --profile test run --rm tests      → 테스트 (실제 PostgreSQL·Redis 사용)
+# docker compose --profile tunnel up -d             → Cloudflare 임시 공개 주소 (휴대폰 설치 테스트용)
+# 서버 운영 (설치·백업·복원·업데이트): deploy/LINUX.md
+
+# 컨테이너 로그는 10MB × 3개까지만 (그냥 두면 디스크가 찰 때까지 쌓인다)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: stocksim-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stocksim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stocksim}
+      POSTGRES_DB: ${POSTGRES_DB:-market_sim}
+      TZ: Asia/Seoul
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"            # 내 PC에서만 (DBeaver·pgAdmin용)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    container_name: stocksim-redis
+    # AOF: 재시작해도 진행 중인 게임 상태 유지. 메모리가 차면 지우지 않고 거부 (게임 상태를 몰래 잃지 않도록)
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  app:
+    build:
+      context: .
+      target: app
+    container_name: stocksim
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-stocksim}:${POSTGRES_PASSWORD:-stocksim}@db:5432/${APP_DB:-market_sim}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      START_CASH: ${START_CASH:-10000000}
+      FEE_RATE: ${FEE_RATE:-0.00015}
+      TAX_RATE: ${TAX_RATE:-0.002}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      PRIVACY_CONTACT: ${PRIVACY_CONTACT:-}
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+      NEWS_DAILY_CAP: ${NEWS_DAILY_CAP:-500}
+    ports:
+      - "127.0.0.1:8000:8000"          # 이 PC(서버) 안에서만. 외부 공개는 아래 tailscale·cloudflare가 app:8000으로 연결
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging: *logging
+
+  tests:
+    profiles: [test]
+    build:
+      context: .
+      target: test
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-stocksim}:${POSTGRES_PASSWORD:-stocksim}@db:5432/market_sim_test
+      REDIS_URL: redis://redis:6379/15
+      SECRET_KEY: test-secret
+
+  # ---- 외부 공개 (셋 중 하나만). .env 의 COMPOSE_PROFILES 에 적어 두면 docker compose up 때마다 같이 뜬다
+
+  # 임시 주소: 계정 없이 바로. 켤 때마다 주소가 바뀜 (docker compose logs tunnel 로 확인)
+  tunnel:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    container_name: stocksim-tunnel
+    command: tunnel --no-autoupdate --url http://app:8000
+    depends_on:
+      - app
+    restart: unless-stopped
+    logging: *logging
+
+  # 고정 주소 ①: Cloudflare 계정 + 내 도메인. 대시보드에서 만든 터널 토큰만 있으면 됨
+  cloudflare:
+    profiles: [cloudflare]
+    image: cloudflare/cloudflared:latest
+    container_name: stocksim-cloudflare
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+    restart: unless-stopped
+    logging: *logging
+
+  # 고정 주소 ②: Tailscale Funnel (도메인 없이 https://이름.xxxx.ts.net)
+  # 기기 정보를 볼륨에 저장하므로 컨테이너를 내렸다 올려도 같은 기기·같은 주소로 다시 붙는다
+  tailscale:
+    profiles: [funnel]
+    image: tailscale/tailscale:latest
+    container_name: stocksim-tailscale
+    hostname: ${TS_HOSTNAME:-market-sim}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}           # 비워 두면 처음 한 번 로그에 로그인 링크가 뜸
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"                   # Docker Desktop에서도 권한 없이 동작
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./deploy/tailscale:/config:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+  redisdata:
+  tailscale-state:

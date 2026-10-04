@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}투자 게임{% endblock %}
+{% block body_class %}desk{% endblock %}
+{% block body %}
+<div class="dtop">
+  <div class="dclock">
+    <span class="dday" id="d-day"></span>
+    <b id="d-clock"></b>
+    <span class="dphase" id="d-phase"></span>
+  </div>
+  <div class="dspeed" role="group" aria-label="시간 속도">
+    <button type="button" data-s="0" title="일시정지 (스페이스바)">⏸</button>
+    <button type="button" data-s="1">▶ x1</button>
+    <button type="button" data-s="2">x2</button>
+    <button type="button" data-s="4">x4</button>
+  </div>
+  <div class="dinds" id="d-inds"></div>
+  <div class="dasset">
+    <span>총자산</span><b id="d-total"></b><small id="d-pl"></small>
+  </div>
+</div>
+<div class="dprog"><i id="d-prog"></i></div>
+
+<div class="dgrid">
+  <section class="dpanel dmap">
+    <div class="dpanel-h"><h2>세계 상황판</h2>
+      <label class="dauto"><input type="checkbox" id="auto-pause"> 사건이 터지면 일시정지</label></div>
+    <div class="map-wrap" id="map">
+      <svg id="world" aria-label="세계지도"></svg>
+      <div class="kr-inset"><span>국내</span><svg id="korea" aria-label="국내 지도"></svg></div>
+      <div class="map-msg" id="map-msg">지도를 불러오는 중…</div>
+    </div>
+  </section>
+
+  <aside class="dpanel dfeed">
+    <div class="dpanel-h"><h2>🔔 알림</h2><span><a href="{{ url_for('game_style') }}">📊 내 투자 성향</a> · <a href="{{ url_for('game_news') }}">전체 뉴스</a></span></div>
+    <div id="upcoming"></div>
+    <div id="feed" class="feed"></div>
+  </aside>
+
+  <section class="dpanel dboard">
+    <div class="dpanel-h"><h2>시세판</h2><span class="muted" id="d-cash"></span></div>
+    <div class="tbl-wrap"><table id="board">
+      <thead><tr><th>종목</th><th>현재가</th><th>등락률</th><th>보유</th><th>평가손익</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section class="dpanel dstock">
+    <div class="dpanel-h">
+      <h2 id="s-name"></h2>
+      <a id="s-link" href="#">상세·일봉 →</a>
+    </div>
+    <div class="s-quote"><b id="s-cur"></b><span id="s-chg"></span><span class="muted" id="s-sector"></span></div>
+    <div class="s-chart"><canvas id="s-chart" aria-label="오늘 가격 흐름"></canvas></div>
+    <div class="s-order">
+      <input type="number" id="qty" min="1" value="1" aria-label="수량">
+      <div class="qbtns">
+        <button type="button" data-p="0.25">25%</button><button type="button" data-p="0.5">50%</button>
+        <button type="button" data-p="1">최대</button><button type="button" data-all>보유 전량</button>
+      </div>
+      <div class="s-btns">
+        <button type="button" class="go buy" id="buy">매수</button>
+        <button type="button" class="go sell" id="sell">매도</button>
+      </div>
+      <div class="s-info muted" id="s-info"></div>
+    </div>
+  </section>
+</div>
+
+<section class="dpanel dhall">
+  <div class="dpanel-h"><h2>명예의 전당 <small class="muted" style="font-size:13px">{{ snap.max_day }}일</small>
+      <a href="{{ url_for('ranking', days=snap.max_day) }}" style="font-size:13px">전체 →</a></h2>
+    <div style="display:flex;gap:8px">
+      <button type="button" class="btn-ghost" data-tour>❓ 사용법</button>
+      <form method="post" action="{{ url_for('game_new') }}" style="display:flex;gap:8px"
+            onsubmit="return confirm('진행 중인 게임을 버리고 새로 시작할까요? (기록되지 않습니다)')">
+        {% for d in game_days %}
+        <button class="btn-ghost" name="days" value="{{ d }}" title="x1 속도로 약 {{ d * 2 }}분">새 게임 {{ d }}일</button>
+        {% endfor %}
+      </form>
+    </div></div>
+  {% if hall %}
+  <div class="tbl-wrap"><table>
+    <tr><th>순위</th><th style="text-align:left">아이디</th><th>최종 자산</th><th>수익률</th><th>거래</th></tr>
+    {% for r in hall %}
+    <tr class="{{ 'rank-me' if r.user_id == user.id }}">
+      <td>{{ loop.index }}</td><td style="text-align:left">{{ r.nickname }}</td>
+      <td>{{ r.total|won }}원</td>
+      <td class="{{ 'up' if r.pct > 0 else ('down' if r.pct < 0 else '') }}">{{ r.pct|pct(2) }}%</td>
+      <td>{{ r.trades }}회</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty">아직 끝까지 마친 사람이 없습니다.</div>
+  {% endif %}
+</section>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="modal" id="detail" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true">
+    <button class="modal-x" type="button" data-close aria-label="닫기">×</button>
+    <div id="detail-body"></div>
+  </div>
+</div>
+
+<div class="modal" id="report" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true"><div id="report-body"></div></div>
+</div>
+
+<script>
+const INIT = {{ snap|tojson }};
+const API = "/api/v1/games/{{ game_id }}";
+const URLS = { tick: API + "/tick", next: API + "/next-day", orders: API + "/orders", state: API + "/state",
+  factors: "{{ url_for('factors') }}",
+  stock: "{{ url_for('game_stock', code='XXX') }}", newGame: "{{ url_for('game_new') }}",
+  style: "{{ url_for('game_style') }}" };
+const FEE = {{ fee_rate }}, TAX = {{ tax_rate }};
+const TOUR = { auto: {{ tour_auto|tojson }}, user: {{ user.id }} };
+</script>
+<script src="{{ url_for('static', filename='tour.js') }}" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<script src="{{ url_for('static', filename='desk.js') }}"></script>
+{% endblock %}

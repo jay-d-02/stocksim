@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% from "_game_news.html" import card %}
+{% block title %}게임 뉴스{% endblock %}
+{% block body %}
+<a class="more" href="{{ url_for('game_home') }}">← 시세판으로</a>
+<h1 style="margin-top:10px">지난 뉴스 전체</h1>
+<p class="muted" style="margin:0 0 18px">사건이 일어난 날과 그 뒤 며칠의 가격을 종목 차트에서 비교해 보세요.</p>
+<section class="panel">
+  {% for n in news %}{{ card(n, stocks) }}{% endfor %}
+</section>
+{% endblock %}

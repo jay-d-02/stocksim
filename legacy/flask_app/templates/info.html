@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} 정보{% endblock %}
+{% block body %}
+{% set diff = q.diff if q else 0 %}
+{% set pct = q.pct if q else 0 %}
+{% set cls = 'up' if diff > 0 else ('down' if diff < 0 else '') %}
+<div class="info-head">
+  <div>
+    <div class="muted" style="font-size:13px">{{ d.market }} · {{ d.sector }}</div>
+    <h1>{{ name }} <span class="code">{{ code }}</span></h1>
+    <div class="quote" style="margin-bottom:0">
+      <span class="p {{ cls }}">{{ price|won }}</span>
+      {% if q %}
+      <span class="d {{ cls }}">{{ '▲' if diff > 0 else ('▼' if diff < 0 else '') }} {{ diff|abs|won }} ({{ '%+.2f'|format(pct) }}%)</span>
+      <span class="muted" style="font-size:13px">{{ q.source }} · {{ q.at }} 기준</span>
+      {% else %}
+      <span class="muted" style="font-size:13px">시세를 불러오지 못해 가상 가격으로 표시합니다</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="info-actions">
+    <a class="btn-ghost" href="{{ url_for('info', prev=code) }}">🎲 다른 종목 랜덤으로 보기</a>
+    <a class="btn-main" href="{{ url_for('stock', code=code) }}">주문하러 가기</a>
+  </div>
+</div>
+
+<div class="grid two">
+  <div class="grid">
+    <section class="panel">
+      <h2>시세 요약</h2>
+      <div class="metrics">
+        <div>시가<b>{{ d.open|won }}</b></div>
+        <div>고가<b class="up">{{ d.high|won }}</b></div>
+        <div>저가<b class="down">{{ d.low|won }}</b></div>
+        <div>거래량<b>{{ d.volume|won }}주</b></div>
+        <div>거래대금<b>{{ d.turnover|eok }}</b></div>
+        <div>시가총액<b>{{ d.market_cap|eok }}</b></div>
+      </div>
+      <div class="range">
+        <div class="range-lbl"><span>52주 최저 <b>{{ d.w52_low|won }}</b></span><span>52주 최고 <b>{{ d.w52_high|won }}</b></span></div>
+        <div class="range-bar"><i style="left:{{ '%.1f'|format(d.w52_pos) }}%"></i></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>투자지표</h2>
+      <div class="metrics">
+        <div>PER<b>{{ '%.2f배'|format(d.per) if d.per else 'N/A (적자)' }}</b></div>
+        <div>EPS<b class="{{ 'down' if d.eps < 0 }}">{{ d.eps|won }}원</b></div>
+        <div>PBR<b>{{ '%.2f'|format(d.pbr) }}배</b></div>
+        <div>BPS<b>{{ d.bps|won }}원</b></div>
+        <div>ROE<b>{{ '%.2f'|format(d.roe) }}%</b></div>
+        <div>배당수익률<b>{{ '%.2f'|format(d.div_yield) }}%</b></div>
+        <div>외국인 비율<b>{{ '%.1f'|format(d.foreign) }}%</b></div>
+        <div>베타<b>{{ '%.2f'|format(d.beta) }}</b></div>
+        <div>상장주식수<b>{{ d.shares|won }}주</b></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" style="align-content:start">
+    <aside class="panel">
+      <h2>증권사 컨센서스</h2>
+      {% set oc = 'up' if d.opinion in ('강력매수', '매수') else ('down' if d.opinion == '매도' else '') %}
+      <div class="opinion {{ oc }}">{{ d.opinion }}</div>
+      <div class="summary" style="margin-bottom:0">
+        <div><span class="muted">목표주가</span><span>{{ d.target|won }}원</span></div>
+        <div><span class="muted">현재가 대비</span><span class="{{ 'up' if d.upside > 0 else 'down' }}">{{ '%+.1f'|format(d.upside) }}%</span></div>
+        <div><span class="muted">참여 애널리스트</span><span>{{ d.analysts }}명</span></div>
+      </div>
+    </aside>
+
+    <aside class="panel">
+      <h2>관련 뉴스</h2>
+      <ul class="news">
+        {% for n in d.news %}
+        <li>{{ n.title }}<span class="muted">{{ n.hours }}시간 전</span></li>
+        {% endfor %}
+      </ul>
+    </aside>
+
+    <aside class="panel">
+      <h2>다른 종목 정보</h2>
+      <div class="chips">
+        {% for c in others %}<a href="{{ url_for('info', code=c) }}">{{ stock_name(c) }}</a>{% endfor %}
+      </div>
+    </aside>
+  </div>
+</div>
+<p class="muted" style="font-size:12px;margin-top:16px">현재가를 제외한 기업 정보·투자지표·의견·뉴스는 연습용으로 무작위 생성한 가상 데이터입니다. 투자 판단에 사용하지 마세요.</p>
+{% endblock %}

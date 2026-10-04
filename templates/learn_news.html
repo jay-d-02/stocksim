@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}오늘의 뉴스{% endblock %}
+{% block body %}
+{% include "_learn_nav.html" %}
+<h1>오늘의 뉴스를 게임의 눈으로</h1>
+<p class="muted lead">실제 경제 뉴스에서 금리·환율·유가·경기가 어느 쪽으로 움직였는지 찾아, 게임의 업종 민감도표로 어떤 업종에 유리하고 불리한지 보여 줍니다.</p>
+
+<div class="rn-bar">
+  <nav class="chips" aria-label="요인">
+    <a href="{{ url_for('learn_news') }}" class="{{ 'on' if not factor }}">전체</a>
+    {% for key, name in factors.items() %}
+    <a href="{{ url_for('learn_news', factor=key) }}" class="{{ 'on' if factor == key }}">{{ name }}</a>
+    {% endfor %}
+  </nav>
+  <span class="muted rn-meta">
+    {% if status.last %}{{ status.last|kst }}에 가져옴 · {{ refresh_min }}분마다 새로 고침{% endif %}
+  </span>
+</div>
+
+{% if not status.configured %}
+<div class="panel rn-note">뉴스 검색 키가 설정되지 않았습니다. 관리자가 <code>.env</code>에 <code>NAVER_CLIENT_ID</code>와 <code>NAVER_CLIENT_SECRET</code>을 넣고 앱을 다시 시작하면 뉴스가 나타납니다.</div>
+{% elif status.error %}
+<div class="panel rn-note">최근 뉴스를 가져오지 못했습니다. {{ status.error }}</div>
+{% endif %}
+
+{% if items %}
+<div class="rn-list">
+  {% for it in items %}
+  {% set n = it.n %}
+  <article class="panel rn-item">
+    <div class="rn-head">
+      {% for key, name, word, d in it.factors %}
+      <a class="rn-factor {{ 'up' if d > 0 else ('down' if d < 0 else '') }}" href="{{ url_for('factors') }}#{{ key }}" title="{{ name }} 원리 읽기">{{ name }} {{ word }}</a>
+      {% endfor %}
+      <span class="muted rn-when">{{ n.published_at|kst }} · {{ n.source }}</span>
+    </div>
+    <h2><a href="{{ n.link }}" target="_blank" rel="noopener noreferrer">{{ n.title }}</a></h2>
+    {% if n.summary %}<p class="rn-sum">{{ n.summary }}</p>{% endif %}
+    {% if it.impacts %}
+    <div class="updown rn-imp">
+      <div><b class="up">유리할 업종</b>
+        {% set good = it.impacts|selectattr(1, 'gt', 0)|list %}
+        {% for s, v in good[:4] %}{{ s }} <span class="up">{{ v|pct(1) }}%</span>{{ ' · ' if not loop.last }}{% else %}<span class="muted">없음</span>{% endfor %}</div>
+      <div><b class="down">불리할 업종</b>
+        {% set bad = (it.impacts|selectattr(1, 'lt', 0)|list)|reverse|list %}
+        {% for s, v in bad[:4] %}{{ s }} <span class="down">{{ v|pct(1) }}%</span>{{ ' · ' if not loop.last }}{% else %}<span class="muted">없음</span>{% endfor %}</div>
+    </div>
+    {% else %}
+    <p class="muted rn-sum">방향이 '그대로'라 업종별 차이는 없습니다. 이럴 땐 시장이 예상한 결과였는지가 중요합니다.</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% elif status.configured %}
+<div class="empty">{{ '이 요인으로 분류된 뉴스가 아직 없습니다.' if factor else '뉴스를 가져오는 중입니다. 잠시 뒤 새로 고침해 보세요.' }}</div>
+{% endif %}
+
+<p class="muted rn-foot">요인과 방향은 제목·요약의 단어로 자동 분류해 틀릴 수 있습니다. 숫자는 요인이 한 단위 움직일 때의 업종 반응(%)을 더한 값으로, 게임 엔진의 민감도표 기준입니다. 실제 주가 예측이나 투자 권유가 아닙니다. 기사 내용은 원문 링크에서 확인하세요. 뉴스 제공: 네이버 검색.</p>
+{% endblock %}

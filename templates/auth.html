@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ '로그인' if mode == 'login' else '회원가입' }}{% endblock %}
+{% block body_class %}authp{% endblock %}
+{% block flashes %}{% endblock %}
+{% block body %}
+{% set is_login = mode == 'login' %}
+{% set f = form or {} %}
+<div class="au">
+  {# 왼쪽(휴대폰은 위쪽): 소개 #}
+  <section class="au-hero" aria-label="소개">
+    <div class="au-tape" aria-hidden="true"><div class="au-tape-in">
+      {% for t in ticker + ticker %}
+        <span>{{ t.name }} <b>{{ t.price|won }}</b>
+          <em class="{{ 'up' if t.pct > 0 else 'down' }}">{{ '▲' if t.pct > 0 else '▼' }}{{ '%.1f'|format(t.pct|abs) }}%</em></span>
+      {% endfor %}
+    </div></div>
+
+    <div class="au-brand"><i></i>주식 시뮬레이터</div>
+    <h2 class="au-head">뉴스가 터지면,<br><span>시장이 움직인다.</span></h2>
+    <p class="au-lead">금리·환율·유가·실적 발표… 5분마다 공개되는 사건을 읽고
+      가상자금 <b>{{ (start_cash // 10000)|won }}만 원</b>으로 30거래일을 버텨 보세요.</p>
+
+    <svg class="au-chart" viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="au-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="var(--brand)" stop-opacity=".35"/>
+          <stop offset="1" stop-color="var(--brand)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path class="au-area" d="M0,110 L30,104 L60,112 L90,96 L120,100 L150,70 L180,78 L210,88 L240,62 L270,70 L300,40 L330,50 L360,28 L400,22 L400,150 L0,150 Z"/>
+      <path class="au-line" pathLength="1" d="M0,110 L30,104 L60,112 L90,96 L120,100 L150,70 L180,78 L210,88 L240,62 L270,70 L300,40 L330,50 L360,28 L400,22"/>
+      <circle class="au-dot d1" cx="150" cy="70" r="4"/>
+      <circle class="au-dot d2" cx="300" cy="40" r="4"/>
+    </svg>
+    <div class="au-pins" aria-hidden="true">
+      <span class="p1">🏦 기준금리 인하</span>
+      <span class="p2">📈 실적 서프라이즈</span>
+    </div>
+
+    <ul class="au-feats">
+      <li><b>📰</b><div><strong>사건이 가격을 움직여요</strong>업종마다 금리·환율·유가에 다르게 반응하는 12개 종목</div></li>
+      <li><b>🧪</b><div><strong>원리부터 배워요</strong>요인 실험실에서 슬라이더로 직접 시장을 움직여 보기</div></li>
+      <li><b>📊</b><div><strong>내 투자 습관을 알려줘요</strong>게임이 끝나면 매매 기록으로 투자 성향을 분석</div></li>
+    </ul>
+  </section>
+
+  {# 오른쪽: 로그인·가입 카드 #}
+  <section class="au-card">
+    <nav class="au-tabs" aria-label="로그인 또는 회원가입">
+      <a href="{{ url_for('login') }}" class="{{ 'on' if is_login }}"{{ ' aria-current=page' if is_login }}>로그인</a>
+      <a href="{{ url_for('register') }}" class="{{ 'on' if not is_login }}"{{ ' aria-current=page' if not is_login }}>회원가입</a>
+    </nav>
+
+    <h1>{{ '다시 오셨네요 👋' if is_login else '투자 데스크를 열어 볼까요?' }}</h1>
+    <p class="au-sub">{{ '아이디로 로그인하고 하던 게임을 이어 가세요.' if is_login
+                         else '1분이면 가입 끝. 가입하면 바로 첫 거래일이 시작돼요.' }}</p>
+
+    {% for cat, msg in get_flashed_messages(with_categories=true) %}
+      <div class="flash {{ cat }}" role="alert">{{ msg }}</div>
+    {% endfor %}
+
+    <form method="post" class="au-form">
+      <div class="au-field">
+        <label for="u">아이디</label>
+        <input id="u" type="text" name="username" value="{{ f.username or '' }}" required minlength="3" maxlength="30"
+               autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="3~30자"
+               {{ 'autofocus' if not f.username }}>
+      </div>
+
+      <div class="au-field">
+        <label for="p">비밀번호</label>
+        <div class="au-pw">
+          <input id="p" type="password" name="password" required minlength="{{ 1 if is_login else 8 }}" maxlength="128"
+                 autocomplete="{{ 'current-password' if is_login else 'new-password' }}"
+                 placeholder="{{ '비밀번호' if is_login else '8자 이상, 아이디와 다르게' }}" {{ 'autofocus' if f.username }}>
+          <button type="button" class="au-eye" aria-label="비밀번호 보기" aria-pressed="false">보기</button>
+        </div>
+        {% if is_login %}<a class="au-forgot" href="{{ url_for('forgot') }}">비밀번호를 잊으셨나요?</a>{% endif %}
+      </div>
+
+      {% if not is_login %}
+      <div class="au-field">
+        <label for="n">닉네임</label>
+        <input id="n" type="text" name="nickname" value="{{ f.nickname or '' }}" required minlength="2" maxlength="20"
+               autocomplete="nickname" placeholder="예: 개미왕">
+        <small>명예의 전당에는 아이디 대신 닉네임이 보여요.</small>
+      </div>
+
+      <fieldset class="au-field au-exp">
+        <legend>투자 경험</legend>
+        <div class="au-exp-opts">
+          {% set icons = {'beginner': '🌱', 'intermediate': '📈', 'expert': '🦈'} %}
+          {% for key, label in experience.items() %}
+            <label class="au-opt">
+              <input type="radio" name="experience" value="{{ key }}"
+                     {{ 'checked' if (f.experience or 'beginner') == key }}>
+              <span><b aria-hidden="true">{{ icons[key] }}</b>{{ label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <div class="au-field">
+        <label for="e">이메일 <em>선택</em></label>
+        <input id="e" type="email" name="email" value="{{ f.email or '' }}" maxlength="254"
+               autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="me@example.com">
+        <small>비밀번호를 잊었을 때 찾는 데만 써요. 적지 않아도 가입할 수 있어요.</small>
+      </div>
+
+      <label class="au-agree">
+        <input type="checkbox" name="agree" required {{ 'checked' if f.agree == 'on' }}>
+        <span><b>[필수]</b> 개인정보 수집·이용에 동의합니다.
+          <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">내용 보기</a></span>
+      </label>
+      <details class="au-privacy">
+        <summary>무엇을 왜 모으나요?</summary>
+        <ul>
+          <li><b>필수</b> 아이디, 비밀번호(암호화해서 저장), 닉네임, 투자 경험, 게임 기록</li>
+          <li><b>선택</b> 이메일 (비밀번호 찾기용)</li>
+          <li><b>목적</b> 로그인, 게임 진행과 투자 성향 분석, 명예의 전당 표시</li>
+          <li><b>보관</b> 탈퇴하면 아이디·닉네임·이메일을 바로 지워요 (게임 기록은 누구 것인지 모르게 남음)</li>
+        </ul>
+      </details>
+      {% endif %}
+
+      <button class="go au-go">{{ '로그인' if is_login else '가입하고 시작하기' }}</button>
+    </form>
+
+    <p class="au-switch">
+      {% if is_login %}처음이신가요? <a href="{{ url_for('register') }}">회원가입</a>
+      {% else %}이미 계정이 있나요? <a href="{{ url_for('login') }}">로그인</a>{% endif %}
+    </p>
+  </section>
+</div>
+
+{% include "_pw_toggle.html" %}
+{% endblock %}

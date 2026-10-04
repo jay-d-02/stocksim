@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}회원 관리{% endblock %}
+{% block body %}
+{% set icons = {'beginner': '🌱', 'intermediate': '📈', 'expert': '🦈'} %}
+{# 지금 검색 조건을 유지한 채 일부만 바꾼 주소 (매크로는 추가 인자를 kwargs로 받음) #}
+{% macro link() %}{{ url_for('admin_users', **dict({'q': q, 'status': status, 'permit': permit}, **kwargs)) }}{% endmacro %}
+<div class="rank-head">
+  <div>
+    <h1>회원 관리 <span class="adm-badge">관리자</span></h1>
+    <p class="muted" style="margin:0">{{ total|won }}명 · 관리자만 볼 수 있는 화면이에요. 개인정보는 필요한 만큼만 보세요.</p>
+  </div>
+  <form method="get" class="adm-search" role="search">
+    <input type="search" name="q" value="{{ q }}" maxlength="100" placeholder="아이디·닉네임·이메일" aria-label="회원 검색">
+    <input type="hidden" name="status" value="{{ status }}"><input type="hidden" name="permit" value="{{ permit }}">
+    <button class="btn-main">검색</button>
+  </form>
+</div>
+
+<div class="rank-filters" style="margin-bottom:14px">
+  <nav class="seg-links" aria-label="상태">
+    {% for key, label in [('Y', '사용 중'), ('N', '탈퇴'), ('all', '전체')] %}
+      <a href="{{ link(status=key, page=1) }}" class="{{ 'on' if status == key }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <nav class="seg-links" aria-label="권한">
+    <a href="{{ link(permit='', page=1) }}" class="{{ 'on' if not permit }}">모든 권한</a>
+    {% for key, label in permits.items() %}
+      <a href="{{ link(permit=key, page=1) }}" class="{{ 'on' if permit == key }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+</div>
+
+<section class="panel">
+  {% if rows %}
+  <div class="tbl-wrap"><table class="adm-tbl">
+    <tr><th>#</th><th style="text-align:left">닉네임 / 아이디</th><th style="text-align:left">이메일</th><th>경험</th>
+        <th>권한</th><th>상태</th><th>게임</th><th>최고 수익률</th><th>가입</th></tr>
+    {% for r in rows %}{% set u = r.user %}
+    <tr class="{{ 'adm-off' if not u.active }}">
+      <td>{{ u.id }}</td>
+      <td style="text-align:left"><a href="{{ url_for('admin_user_detail', user_id=u.id) }}">{{ u.display_name }}</a>
+        {% if u.username %}<small class="muted adm-sub">{{ u.username }}</small>{% endif %}</td>
+      <td style="text-align:left" class="muted">{{ u.email or '-' }}</td>
+      <td title="{{ experience[u.experience] }}">{{ icons[u.experience] }}</td>
+      <td>{% if u.permit == 'ADMIN' %}<span class="adm-badge">관리자</span>{% else %}<span class="muted">일반</span>{% endif %}</td>
+      <td>{% if u.active %}<span class="adm-st y">Y</span>{% else %}<span class="adm-st n" title="{{ u.withdrawn_at.strftime('%Y.%m.%d') }} 탈퇴">N</span>{% endif %}</td>
+      <td>{{ r.finished }}<span class="muted"> / {{ r.games }}</span></td>
+      <td class="{{ 'up' if r.best_pct and r.best_pct > 0 else ('down' if r.best_pct and r.best_pct < 0 else '') }}">
+        {{ (r.best_pct|pct(2) ~ '%') if r.best_pct is not none else '-' }}</td>
+      <td class="muted">{{ u.created_at.strftime('%y.%m.%d') }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% if pages > 1 %}
+  <nav class="adm-pages" aria-label="쪽">
+    {% if page > 1 %}<a href="{{ link(page=page - 1) }}">← 이전</a>{% endif %}
+    <span class="muted">{{ page }} / {{ pages }}</span>
+    {% if page < pages %}<a href="{{ link(page=page + 1) }}">다음 →</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="empty">조건에 맞는 회원이 없어요.</div>
+  {% endif %}
+</section>
+{% endblock %}

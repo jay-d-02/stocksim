@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}비밀번호 찾기{% endblock %}
+{% block body_class %}authp{% endblock %}
+{% block flashes %}{% endblock %}
+{% block body %}
+<section class="au-card au-solo">
+  <a class="au-back" href="{{ url_for('login') }}">← 로그인으로</a>
+  <h1>비밀번호 찾기 🔑</h1>
+  {% if sent %}
+    <div class="flash ok" role="status">가입할 때 적은 이메일이 맞다면, 재설정 링크를 보냈어요. 30분 안에 메일의 링크를 눌러 주세요.</div>
+    <p class="au-sub">메일이 안 보이면 스팸함도 확인해 보세요.</p>
+  {% else %}
+    <p class="au-sub">가입할 때 적은 이메일로 비밀번호를 새로 정하는 링크를 보내 드려요.</p>
+    {% for cat, msg in get_flashed_messages(with_categories=true) %}
+      <div class="flash {{ cat }}" role="alert">{{ msg }}</div>
+    {% endfor %}
+    {% if not mail_on %}
+      <div class="flash err">지금은 메일 발송이 설정되지 않아 링크가 운영자 서버 기록에만 남아요. 운영자에게 문의해 주세요.</div>
+    {% endif %}
+    <form method="post" class="au-form">
+      <div class="au-field">
+        <label for="e">이메일</label>
+        <input id="e" type="email" name="email" value="{{ email or '' }}" required maxlength="254" autofocus
+               autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="me@example.com">
+      </div>
+      <button class="go au-go">재설정 링크 받기</button>
+    </form>
+    <p class="au-switch">이메일을 등록하지 않았다면 운영자에게 문의해 주세요.</p>
+  {% endif %}
+</section>
+{% endblock %}
