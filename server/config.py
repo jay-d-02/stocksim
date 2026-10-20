@@ -31,10 +31,22 @@ class Settings:
     news_daily_cap: int = 500     # 하루 API 호출 상한 (무료 한도: 월 775,000건)
 
 
+def _database_url():
+    """Vercel+Neon은 DATABASE_URL(풀러 경유)과 DATABASE_URL_UNPOOLED(직접 연결)를 함께 넣어 준다.
+    풀러는 접속 옵션(timezone)을 무시하므로 직접 연결을 쓰고, postgres:// 주소는 psycopg 3 드라이버로 맞춘다"""
+    url = (os.environ.get("DATABASE_URL_UNPOOLED") or os.environ.get("DATABASE_URL")
+           or "postgresql+psycopg://stocksim:stocksim@localhost:5432/market_sim")
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def load():
     s = Settings(
-        database_url=os.environ.get("DATABASE_URL", "postgresql+psycopg://stocksim:stocksim@localhost:5432/market_sim"),
-        redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        database_url=_database_url(),
+        # KV_URL: Vercel 마켓플레이스의 Upstash Redis가 넣어 주는 이름
+        redis_url=os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or "redis://localhost:6379/0",
         secret_key=os.environ.get("SECRET_KEY") or DEV_SECRET,
         start_cash=int(os.environ.get("START_CASH", 10_000_000)),
         fee_rate=Decimal(os.environ.get("FEE_RATE", "0.00015")),

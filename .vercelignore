@@ -1,0 +1,14 @@
+# Vercel 배포에 필요 없는 것 (앱은 api/index.py → server/·simulator/·templates/·static/ 만 씀)
+.env
+.env.*
+legacy/
+docs/
+deploy/
+migrations/
+tests/
+scripts/
+avg_test
+*.dump
+*.tgz
+__pycache__/
+.pytest_cache/
